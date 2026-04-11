@@ -11,6 +11,10 @@ on:
         description: Optional target repository in owner/repo format for downstream PR creation
         required: false
         type: string
+      project_name:
+        description: GitHub Project name to link the created PR to
+        required: false
+        type: string
     outputs:
       status:
         description: Final issue automation status
@@ -43,6 +47,10 @@ on:
         description: Optional target repository in owner/repo format for downstream PR creation
         required: false
         type: string
+      project_name:
+        description: GitHub Project name to link the created PR to
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -66,6 +74,7 @@ jobs:
       issue_title: ${{ steps.evaluate.outputs.issue_title }}
       caller_status: ${{ steps.evaluate.outputs.caller_status }}
       target_repo: ${{ steps.evaluate.outputs.target_repo }}
+      project_name: ${{ steps.evaluate.outputs.project_name }}
 
     steps:
       - name: Evaluate issue body and build prompt
@@ -75,6 +84,7 @@ jobs:
           DISPATCH_ISSUE_NUMBER: ${{ inputs.issue_number || github.event.inputs.issue_number || github.event.client_payload.issue_number || github.event.client_payload.issue.number || '' }}
           DISPATCH_PROJECT_STATUS: ${{ github.event.client_payload.project_status || github.event.client_payload.status || github.event.client_payload.field_value || github.event.client_payload.to_status || '' }}
           DISPATCH_TARGET_REPO: ${{ inputs.target_repo || github.event.inputs.target_repo || github.event.client_payload.target_repo || github.event.client_payload.repository || '' }}
+          DISPATCH_PROJECT_NAME: ${{ inputs.project_name || github.event.inputs.project_name || github.event.client_payload.project_name || github.event.client_payload.project || '' }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -114,11 +124,13 @@ jobs:
               const rawProjectStatus = String(process.env.DISPATCH_PROJECT_STATUS || "");
               const normalizedProjectStatus = normalizeProjectStatus(rawProjectStatus);
               const rawTargetRepo = String(process.env.DISPATCH_TARGET_REPO || "").trim();
+              const rawProjectName = String(process.env.DISPATCH_PROJECT_NAME || "").trim();
               return {
                 issueNumber,
                 rawProjectStatus,
                 normalizedProjectStatus,
                 rawTargetRepo,
+                rawProjectName,
               };
             }
 
@@ -386,12 +398,13 @@ jobs:
               };
             }
 
-            function publishOutputs(outcome, issueNumber, issueTitle, callerStatus, targetRepo) {
+            function publishOutputs(outcome, issueNumber, issueTitle, callerStatus, targetRepo, projectName) {
               core.info(`Final evaluate status for issue #${issueNumber}: ${outcome.status}`);
               core.info(`Final evaluate message: ${outcome.message}`);
               core.info(`Issue title: ${issueTitle || "(none)"}`);
               core.info(`Caller status context: ${callerStatus || "(none)"}`);
               core.info(`Target repository: ${targetRepo}`);
+              core.info(`Project name: ${projectName || "(none)"}`);
 
               core.setOutput("status", outcome.status);
               core.setOutput("message", outcome.message);
@@ -401,6 +414,7 @@ jobs:
               core.setOutput("issue_title", issueTitle || "");
               core.setOutput("caller_status", callerStatus);
               core.setOutput("target_repo", targetRepo);
+              core.setOutput("project_name", projectName || "");
             }
 
             const dispatchInputs = resolveDispatchInputs();
@@ -443,7 +457,7 @@ jobs:
               rawProjectStatus: dispatchInputs.rawProjectStatus,
               existingStartedComment,
             });
-            publishOutputs(outcome, issue.number, issue.title || "", callerStatus, targetRepo);
+            publishOutputs(outcome, issue.number, issue.title || "", callerStatus, targetRepo, dispatchInputs.rawProjectName);
 
   handoff:
     name: "Handoff #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"
@@ -458,6 +472,7 @@ jobs:
       source_status: ${{ needs.evaluate.outputs.caller_status }}
       # Downstream workflow must accept and use this input to create PRs in cross-repository subtasks.
       target_repo: ${{ needs.evaluate.outputs.target_repo }}
+      project_name: ${{ needs.evaluate.outputs.project_name }}
 
   report:
     name: "Report #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"

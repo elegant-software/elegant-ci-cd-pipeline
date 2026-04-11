@@ -24,6 +24,10 @@ on:
         description: Target repository for checkout and PR creation (owner/repo)
         required: false
         type: string
+      project_name:
+        description: GitHub Project name to link the created PR to
+        required: false
+        type: string
   workflow_call:
     inputs:
       prompt:
@@ -46,6 +50,10 @@ on:
         description: Target repository for checkout and PR creation (owner/repo)
         required: false
         type: string
+      project_name:
+        description: GitHub Project name to link the created PR to
+        required: false
+        type: string
     outputs:
       final_feedback:
         description: Final non-empty line returned by the Codex CLI run
@@ -57,6 +65,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  repository-projects: write
 
 jobs:
   codex-spec-kit:
@@ -282,6 +291,106 @@ jobs:
             | Source Status | `${{ steps.run_codex.outputs.source_status }}` |
             | Target Repo | `${{ steps.run_codex.outputs.target_repo }}` |
             | Prompt | `${{ inputs.prompt || github.event.inputs.prompt || '$speckit.specify Example feature request from workflow dispatch' }}` |
+
+      - name: Link PR to GitHub Project
+        if: steps.create_pr.outputs.pull-request-number != '' && (inputs.project_name || github.event.inputs.project_name) != ''
+        uses: actions/github-script@v8
+        env:
+          PR_NUMBER: ${{ steps.create_pr.outputs.pull-request-number }}
+          PROJECT_NAME: ${{ inputs.project_name || github.event.inputs.project_name }}
+          TARGET_REPO: ${{ steps.run_codex.outputs.target_repo }}
+        with:
+          github-token: ${{ secrets.CROSS_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            const projectName = process.env.PROJECT_NAME;
+            const targetRepo = process.env.TARGET_REPO;
+            const [repoOwner] = targetRepo.split("/");
+
+            core.info(`Linking PR #${prNumber} to project '${projectName}' (owner: ${repoOwner})`);
+
+            // Find the project by name under the repository owner (org or user)
+            const projectQuery = `
+              query($login: String!, $cursor: String) {
+                organization(login: $login) {
+                  projectsV2(first: 20, after: $cursor) {
+                    nodes { id title }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                }
+              }
+            `;
+
+            const userProjectQuery = `
+              query($login: String!, $cursor: String) {
+                user(login: $login) {
+                  projectsV2(first: 20, after: $cursor) {
+                    nodes { id title }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                }
+              }
+            `;
+
+            async function findProject(login, name) {
+              for (const query of [projectQuery, userProjectQuery]) {
+                try {
+                  let cursor = null;
+                  while (true) {
+                    const result = await github.graphql(query, { login, cursor });
+                    const holder = result.organization || result.user;
+                    if (!holder) break;
+                    const match = holder.projectsV2.nodes.find(
+                      (p) => p.title.toLowerCase() === name.toLowerCase()
+                    );
+                    if (match) return match.id;
+                    if (!holder.projectsV2.pageInfo.hasNextPage) break;
+                    cursor = holder.projectsV2.pageInfo.endCursor;
+                  }
+                } catch (e) {
+                  core.info(`Query attempt failed (may be wrong entity type): ${e.message}`);
+                }
+              }
+              return null;
+            }
+
+            const projectId = await findProject(repoOwner, projectName);
+            if (!projectId) {
+              core.warning(`Project '${projectName}' not found under '${repoOwner}'. Skipping project link.`);
+              return;
+            }
+
+            core.info(`Found project ID: ${projectId}`);
+
+            // Get the PR node ID
+            const [prOwner, prRepo] = targetRepo.split("/");
+            const prQuery = `
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) { id }
+                }
+              }
+            `;
+            const prResult = await github.graphql(prQuery, {
+              owner: prOwner,
+              repo: prRepo,
+              number: prNumber,
+            });
+            const prNodeId = prResult.repository.pullRequest.id;
+
+            // Add PR to the project
+            const addMutation = `
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                  item { id }
+                }
+              }
+            `;
+            const addResult = await github.graphql(addMutation, {
+              projectId,
+              contentId: prNodeId,
+            });
+            core.info(`PR #${prNumber} linked to project '${projectName}' (item: ${addResult.addProjectV2ItemById.item.id})`);
 
       - name: Print PR result
         env:
