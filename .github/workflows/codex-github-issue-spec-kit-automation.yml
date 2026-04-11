@@ -55,7 +55,7 @@ concurrency:
 
 jobs:
   evaluate:
-    name: Evaluate issue for Spec Kit handoff
+    name: "Evaluate #${{ github.event.issue.number || inputs.issue_number || github.event.client_payload.issue_number || github.event.client_payload.issue.number || github.event.inputs.issue_number || '?' }}"
     runs-on: ubuntu-latest
     outputs:
       status: ${{ steps.evaluate.outputs.status }}
@@ -374,7 +374,7 @@ jobs:
               }
 
               const promptRef = `issue-spec-${issue.number}-${context.runId}`;
-              const prompt = `${commandPrefix} ${normalizedBody}`;
+              const prompt = `${commandPrefix} [spec-sequence:${issue.number}] ${normalizedBody}`;
               core.info(`Issue #${issue.number} is eligible. Prompt ref: ${promptRef}`);
               core.info(`Resolved command input: ${preview(prompt, 320)}`);
               return {
@@ -443,7 +443,7 @@ jobs:
             publishOutputs(outcome, issue.number, callerStatus, targetRepo);
 
   handoff:
-    name: Call Codex Spec Kit workflow
+    name: "Handoff #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"
     needs: evaluate
     if: needs.evaluate.outputs.status == 'ready'
     uses: ./.github/workflows/codex-spec-kit-agent.yml
@@ -456,7 +456,7 @@ jobs:
       target_repo: ${{ needs.evaluate.outputs.target_repo }}
 
   report:
-    name: Record issue outcome
+    name: "Report #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"
     runs-on: ubuntu-latest
     needs:
       - evaluate

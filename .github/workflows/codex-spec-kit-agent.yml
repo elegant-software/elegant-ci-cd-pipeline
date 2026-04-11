@@ -52,6 +52,7 @@ permissions:
 
 jobs:
   codex-spec-kit:
+    name: "Codex Spec Kit #${{ inputs.issue_number || github.event.inputs.issue_number || '?' }} (${{ inputs.source_status || github.event.inputs.source_status || 'manual' }})"
     runs-on: self-hosted
     outputs:
       final_feedback: ${{ steps.run_codex.outputs.final_feedback }}
