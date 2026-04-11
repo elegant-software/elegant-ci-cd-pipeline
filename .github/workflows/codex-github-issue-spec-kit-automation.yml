@@ -75,6 +75,7 @@ jobs:
       caller_status: ${{ steps.evaluate.outputs.caller_status }}
       target_repo: ${{ steps.evaluate.outputs.target_repo }}
       project_name: ${{ steps.evaluate.outputs.project_name }}
+      branch_prefix: ${{ steps.evaluate.outputs.branch_prefix }}
 
     steps:
       - name: Evaluate issue body and build prompt
@@ -203,6 +204,28 @@ jobs:
               }
 
               return eventName || "unknown";
+            }
+
+            const labelBranchPrefixMap = {
+              "feature": "feature",
+              "bug-fix": "bugfix",
+              "documentation": "docs",
+              "infrastructure": "infra",
+              "dependencies": "deps",
+              "tests": "test",
+              "config": "config",
+              "breaking-change": "breaking",
+            };
+
+            function resolveBranchPrefix(issueLabels) {
+              if (!issueLabels || issueLabels.length === 0) return "codex";
+              for (const label of issueLabels) {
+                const name = typeof label === "string" ? label : label.name;
+                if (name && labelBranchPrefixMap[name]) {
+                  return labelBranchPrefixMap[name];
+                }
+              }
+              return "codex";
             }
 
             async function loadIssue(eventName, issueNumber) {
@@ -398,7 +421,7 @@ jobs:
               };
             }
 
-            function publishOutputs(outcome, issueNumber, issueTitle, callerStatus, targetRepo, projectName) {
+            function publishOutputs(outcome, issueNumber, issueTitle, callerStatus, targetRepo, projectName, branchPrefix) {
               core.info(`Final evaluate status for issue #${issueNumber}: ${outcome.status}`);
               core.info(`Final evaluate message: ${outcome.message}`);
               core.info(`Issue title: ${issueTitle || "(none)"}`);
@@ -415,6 +438,7 @@ jobs:
               core.setOutput("caller_status", callerStatus);
               core.setOutput("target_repo", targetRepo);
               core.setOutput("project_name", projectName || "");
+              core.setOutput("branch_prefix", branchPrefix || "codex");
             }
 
             const dispatchInputs = resolveDispatchInputs();
@@ -457,7 +481,8 @@ jobs:
               rawProjectStatus: dispatchInputs.rawProjectStatus,
               existingStartedComment,
             });
-            publishOutputs(outcome, issue.number, issue.title || "", callerStatus, targetRepo, dispatchInputs.rawProjectName);
+            const branchPrefix = resolveBranchPrefix(issue.labels);
+            publishOutputs(outcome, issue.number, issue.title || "", callerStatus, targetRepo, dispatchInputs.rawProjectName, branchPrefix);
 
   handoff:
     name: "Handoff #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"
@@ -473,6 +498,7 @@ jobs:
       # Downstream workflow must accept and use this input to create PRs in cross-repository subtasks.
       target_repo: ${{ needs.evaluate.outputs.target_repo }}
       project_name: ${{ needs.evaluate.outputs.project_name }}
+      branch_prefix: ${{ needs.evaluate.outputs.branch_prefix }}
 
   report:
     name: "Report #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"

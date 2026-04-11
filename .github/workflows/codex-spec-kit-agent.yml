@@ -28,6 +28,11 @@ on:
         description: GitHub Project name to link the created PR to
         required: false
         type: string
+      branch_prefix:
+        description: "Branch category prefix (e.g. feature, bugfix, docs). Defaults to codex"
+        required: false
+        default: codex
+        type: string
   workflow_call:
     inputs:
       prompt:
@@ -53,6 +58,11 @@ on:
       project_name:
         description: GitHub Project name to link the created PR to
         required: false
+        type: string
+      branch_prefix:
+        description: "Branch category prefix (e.g. feature, bugfix, docs). Defaults to codex"
+        required: false
+        default: codex
         type: string
     outputs:
       final_feedback:
@@ -135,6 +145,7 @@ jobs:
           ISSUE_TITLE: ${{ inputs.issue_title || github.event.inputs.issue_title || '' }}
           SOURCE_STATUS: ${{ inputs.source_status || github.event.inputs.source_status || '' }}
           TARGET_REPO: ${{ inputs.target_repo || github.event.inputs.target_repo || github.repository }}
+          BRANCH_PREFIX: ${{ inputs.branch_prefix || github.event.inputs.branch_prefix || 'codex' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -175,6 +186,20 @@ jobs:
             normalized_status_slug="manual"
           fi
 
+          # Build a meaningful branch name: prefix/issue-number-slugified-title
+          resolved_branch_prefix="$BRANCH_PREFIX"
+          if [ -z "$resolved_branch_prefix" ]; then
+            resolved_branch_prefix="codex"
+          fi
+          if [ -n "$resolved_issue_title" ]; then
+            title_slug="$(printf '%s' "$resolved_issue_title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+            # Truncate slug to keep branch name reasonable (max 60 chars for the slug part)
+            title_slug="$(printf '%s' "$title_slug" | cut -c1-60 | sed -E 's/-+$//')"
+            branch_name="${resolved_branch_prefix}/${resolved_issue_number}-${title_slug}"
+          else
+            branch_name="${resolved_branch_prefix}/spec-kit-${resolved_issue_number}-${GITHUB_RUN_ID}"
+          fi
+
           if [ -n "$resolved_issue_title" ]; then
             pr_title="${resolved_issue_title} (#${resolved_issue_number})"
           else
@@ -188,6 +213,7 @@ jobs:
           echo "Resolved issue title: $resolved_issue_title"
           echo "Resolved source status: $resolved_source_status"
           echo "Resolved target repository: $resolved_target_repo"
+          echo "Computed branch name: $branch_name"
           echo "Computed PR title: $pr_title"
           echo "Computed commit message: $commit_message"
           echo "Using CODEX_HOME: $CODEX_HOME"
@@ -220,6 +246,7 @@ jobs:
             echo "EOF" >> "$GITHUB_OUTPUT"
             echo "pr_title=$pr_title" >> "$GITHUB_OUTPUT"
             echo "commit_message=$commit_message" >> "$GITHUB_OUTPUT"
+            echo "branch_name=$branch_name" >> "$GITHUB_OUTPUT"
             echo "issue_number=$resolved_issue_number" >> "$GITHUB_OUTPUT"
             echo "source_status=$resolved_source_status" >> "$GITHUB_OUTPUT"
             echo "target_repo=$resolved_target_repo" >> "$GITHUB_OUTPUT"
@@ -276,7 +303,7 @@ jobs:
         with:
           token: ${{ secrets.CROSS_REPO_TOKEN || secrets.GITHUB_TOKEN }}
           base: ${{ steps.detect_changes.outputs.base_ref }}
-          branch: codex/spec-kit-${{ github.run_id }}
+          branch: ${{ steps.run_codex.outputs.branch_name }}
           delete-branch: true
           commit-message: ${{ steps.run_codex.outputs.commit_message }}
           title: ${{ steps.run_codex.outputs.pr_title }}
