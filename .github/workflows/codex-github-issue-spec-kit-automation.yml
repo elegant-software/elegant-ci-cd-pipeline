@@ -63,6 +63,7 @@ jobs:
       prompt_ref: ${{ steps.evaluate.outputs.prompt_ref }}
       prompt: ${{ steps.evaluate.outputs.prompt }}
       issue_number: ${{ steps.evaluate.outputs.issue_number }}
+      issue_title: ${{ steps.evaluate.outputs.issue_title }}
       caller_status: ${{ steps.evaluate.outputs.caller_status }}
       target_repo: ${{ steps.evaluate.outputs.target_repo }}
 
@@ -385,9 +386,10 @@ jobs:
               };
             }
 
-            function publishOutputs(outcome, issueNumber, callerStatus, targetRepo) {
+            function publishOutputs(outcome, issueNumber, issueTitle, callerStatus, targetRepo) {
               core.info(`Final evaluate status for issue #${issueNumber}: ${outcome.status}`);
               core.info(`Final evaluate message: ${outcome.message}`);
+              core.info(`Issue title: ${issueTitle || "(none)"}`);
               core.info(`Caller status context: ${callerStatus || "(none)"}`);
               core.info(`Target repository: ${targetRepo}`);
 
@@ -396,6 +398,7 @@ jobs:
               core.setOutput("prompt_ref", outcome.promptRef);
               core.setOutput("prompt", outcome.prompt);
               core.setOutput("issue_number", String(issueNumber));
+              core.setOutput("issue_title", issueTitle || "");
               core.setOutput("caller_status", callerStatus);
               core.setOutput("target_repo", targetRepo);
             }
@@ -440,7 +443,7 @@ jobs:
               rawProjectStatus: dispatchInputs.rawProjectStatus,
               existingStartedComment,
             });
-            publishOutputs(outcome, issue.number, callerStatus, targetRepo);
+            publishOutputs(outcome, issue.number, issue.title || "", callerStatus, targetRepo);
 
   handoff:
     name: "Handoff #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"
@@ -451,6 +454,7 @@ jobs:
     with:
       prompt: ${{ needs.evaluate.outputs.prompt }}
       issue_number: ${{ needs.evaluate.outputs.issue_number }}
+      issue_title: ${{ needs.evaluate.outputs.issue_title }}
       source_status: ${{ needs.evaluate.outputs.caller_status }}
       # Downstream workflow must accept and use this input to create PRs in cross-repository subtasks.
       target_repo: ${{ needs.evaluate.outputs.target_repo }}

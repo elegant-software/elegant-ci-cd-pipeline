@@ -12,6 +12,10 @@ on:
         description: Issue number associated with this run
         required: false
         type: string
+      issue_title:
+        description: Issue title for PR naming and linking
+        required: false
+        type: string
       source_status:
         description: Caller status context (project status or issue event fallback)
         required: false
@@ -28,6 +32,10 @@ on:
         type: string
       issue_number:
         description: Issue number associated with this run
+        required: false
+        type: string
+      issue_title:
+        description: Issue title for PR naming and linking
         required: false
         type: string
       source_status:
@@ -115,6 +123,7 @@ jobs:
         env:
           CODEX_PROMPT: ${{ inputs.prompt || github.event.inputs.prompt || '$speckit.specify Example feature request from workflow dispatch' }}
           ISSUE_NUMBER: ${{ inputs.issue_number || github.event.inputs.issue_number || '' }}
+          ISSUE_TITLE: ${{ inputs.issue_title || github.event.inputs.issue_title || '' }}
           SOURCE_STATUS: ${{ inputs.source_status || github.event.inputs.source_status || '' }}
           TARGET_REPO: ${{ inputs.target_repo || github.event.inputs.target_repo || github.repository }}
         shell: bash
@@ -136,6 +145,7 @@ jobs:
           fi
           normalized_prompt="$CODEX_PROMPT"
           resolved_issue_number="$ISSUE_NUMBER"
+          resolved_issue_title="$ISSUE_TITLE"
           resolved_source_status="$SOURCE_STATUS"
           resolved_target_repo="$TARGET_REPO"
 
@@ -156,12 +166,17 @@ jobs:
             normalized_status_slug="manual"
           fi
 
-          pr_title="Codex Spec Kit issue #${resolved_issue_number} (${resolved_source_status})"
+          if [ -n "$resolved_issue_title" ]; then
+            pr_title="${resolved_issue_title} (#${resolved_issue_number})"
+          else
+            pr_title="Codex Spec Kit issue #${resolved_issue_number} (${resolved_source_status})"
+          fi
           commit_message="feat(spec-kit): issue #${resolved_issue_number} (${normalized_status_slug})"
 
           echo "Workflow input prompt: $CODEX_PROMPT"
           echo "Resolved prompt: $normalized_prompt"
           echo "Resolved issue number: $resolved_issue_number"
+          echo "Resolved issue title: $resolved_issue_title"
           echo "Resolved source status: $resolved_source_status"
           echo "Resolved target repository: $resolved_target_repo"
           echo "Computed PR title: $pr_title"
@@ -259,17 +274,14 @@ jobs:
           body: |
             Automated changes from Codex Spec Kit workflow.
 
-            Issue:
-            #${{ steps.run_codex.outputs.issue_number }}
+            Closes #${{ steps.run_codex.outputs.issue_number }}
 
-            Source Status:
-            `${{ steps.run_codex.outputs.source_status }}`
-
-            Target Repo:
-            `${{ steps.run_codex.outputs.target_repo }}`
-
-            Prompt:
-            `${{ inputs.prompt || github.event.inputs.prompt || '$speckit.specify Example feature request from workflow dispatch' }}`
+            | Detail | Value |
+            |--------|-------|
+            | Issue | #${{ steps.run_codex.outputs.issue_number }} |
+            | Source Status | `${{ steps.run_codex.outputs.source_status }}` |
+            | Target Repo | `${{ steps.run_codex.outputs.target_repo }}` |
+            | Prompt | `${{ inputs.prompt || github.event.inputs.prompt || '$speckit.specify Example feature request from workflow dispatch' }}` |
 
       - name: Print PR result
         env:
