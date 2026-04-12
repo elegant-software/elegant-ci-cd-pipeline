@@ -99,7 +99,6 @@ jobs:
               "in progress": "$speckit.implement",
               "in review": "$speckit.analyse",
             };
-            const handoffMarkerPrefix = "<!-- issue-spec-automation:issue=";
 
             function preview(text, limit = 240) {
               if (!text) return "";
@@ -324,24 +323,6 @@ jobs:
               );
             }
 
-            async function findExistingStartedComment(issueNumber) {
-              const existingComments = await github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number: issueNumber,
-                per_page: 100,
-              });
-
-              core.info(`Existing issue comment count: ${existingComments.length}`);
-
-              return existingComments.find((comment) => {
-                if (!comment.body) return false;
-                return (
-                  comment.body.includes(`${handoffMarkerPrefix}${issueNumber};status=handoff_started;`)
-                );
-              });
-            }
-
             function buildEvaluateOutcome({
               issue,
               normalizedBody,
@@ -350,20 +331,7 @@ jobs:
               targetRepoValidation,
               commandPrefix,
               rawProjectStatus,
-              existingStartedComment,
             }) {
-              if (existingStartedComment) {
-                core.warning(
-                  `Skipping issue #${issue.number} because an existing handoff marker was found in comment ${existingStartedComment.html_url}`
-                );
-                return {
-                  status: "skipped",
-                  message: `Issue already has a recorded Spec Kit handoff in comment ${existingStartedComment.html_url}.`,
-                  promptRef: "",
-                  prompt: "",
-                };
-              }
-
               if (!dispatchValidation.ok) {
                 core.warning(
                   `Skipping issue #${issue.number} due to repository dispatch validation failure: ${dispatchValidation.message}`
@@ -471,7 +439,6 @@ jobs:
               targetRepo
             );
 
-            const existingStartedComment = await findExistingStartedComment(issue.number);
             const outcome = buildEvaluateOutcome({
               issue,
               normalizedBody,
@@ -480,7 +447,6 @@ jobs:
               targetRepoValidation,
               commandPrefix,
               rawProjectStatus: dispatchInputs.rawProjectStatus,
-              existingStartedComment,
             });
             const branchPrefix = resolveBranchPrefix(issue.labels);
             publishOutputs(outcome, issue.number, issue.title || "", callerStatus, targetRepo, dispatchInputs.rawProjectName, branchPrefix);
@@ -525,6 +491,7 @@ jobs:
           EVALUATE_PROMPT: ${{ needs.evaluate.outputs.prompt }}
           EVALUATE_TARGET_REPO: ${{ needs.evaluate.outputs.target_repo }}
           PROMPT_REF: ${{ needs.evaluate.outputs.prompt_ref }}
+          CALLER_STATUS: ${{ needs.evaluate.outputs.caller_status }}
           HANDOFF_RESULT: ${{ needs.handoff.result || 'skipped' }}
           DOWNSTREAM_WORKFLOW: .github/workflows/codex-spec-kit-agent.yml
         with:
@@ -543,6 +510,7 @@ jobs:
             const evaluateTargetRepo = process.env.EVALUATE_TARGET_REPO || "";
             const promptRef = process.env.PROMPT_REF || "";
             const downstreamWorkflow = process.env.DOWNSTREAM_WORKFLOW;
+            const callerStatus = process.env.CALLER_STATUS || "";
             const handoffResult = process.env.HANDOFF_RESULT;
             const defaultCommand = "$speckit.specify";
 
@@ -575,14 +543,17 @@ jobs:
               core.warning(`Downstream handoff failed for issue #${issueNumber} (job result: ${handoffResult}).`);
             }
 
+            const statusLabel = callerStatus ? callerStatus.toUpperCase() : "N/A";
             const lines = [];
             if (status === "handoff_started") {
               lines.push(`<!-- issue-spec-automation:issue=${issueNumber};status=${status};prompt_ref=${promptRef} -->`);
             }
-            lines.push("## Issue Spec Automation");
+            lines.push(`## Issue Spec Automation (${statusLabel}) : \`${commandPrefix}\` result: \`${status}\``);
             lines.push("");
-            lines.push(`- Status: \`${status}\``);
-            lines.push(`- Message: ${message}`);
+            if (message) {
+              lines.push(`> ${message}`);
+              lines.push("");
+            }
             if (promptRef) {
               lines.push(`- Prompt Ref: \`${promptRef}\``);
             }
