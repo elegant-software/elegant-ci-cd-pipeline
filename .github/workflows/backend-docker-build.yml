@@ -39,6 +39,7 @@ permissions:
   attestations: write
   contents: read
   packages: write
+  checks: write
 
 jobs:
   build:
