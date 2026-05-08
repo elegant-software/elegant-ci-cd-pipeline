@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: "integrationTest"
+      contract-test-task:
+        description: Gradle task used for contract tests; skipped automatically if the task does not exist in the project
+        required: false
+        type: string
+        default: "contractTest"
 
 jobs:
   test:
@@ -25,6 +30,7 @@ jobs:
 
     permissions:
       contents: read
+      checks: write
 
     steps:
       - name: Checkout code
@@ -47,40 +53,47 @@ jobs:
 
       - name: Summarize unit test results
         if: always()
+        shell: python3 {0}
         run: |
-          shopt -s nullglob globstar
-          files=(**/build/test-results/test/TEST-*.xml)
-          total=0
-          failures=0
-          errors=0
-          skipped=0
+          import glob, os, xml.etree.ElementTree as ET
 
-          for file in "${files[@]}"; do
-            attrs=$(sed -n 's/.*tests="\([0-9]\+\)".*failures="\([0-9]\+\)".*errors="\([0-9]\+\)".*skipped="\([0-9]\+\)".*/\1 \2 \3 \4/p' "$file" | head -n 1)
-            if [[ -n "$attrs" ]]; then
-              read -r t f e s <<< "$attrs"
-              total=$((total + t))
-              failures=$((failures + f))
-              errors=$((errors + e))
-              skipped=$((skipped + s))
-            fi
-          done
+          files = sorted(glob.glob("**/build/test-results/test/TEST-*.xml", recursive=True))
+          total = failures = errors = skipped = 0
+          failed_tests = []
 
-          {
-            echo "## Unit Test Results"
-            if (( ${#files[@]} == 0 )); then
-              echo ""
-              echo "No unit test result files were found."
-            else
-              echo ""
-              echo "| Metric | Value |"
-              echo "|--------|-------|"
-              echo "| Tests | $total |"
-              echo "| Failures | $failures |"
-              echo "| Errors | $errors |"
-              echo "| Skipped | $skipped |"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          for path in files:
+            root = ET.parse(path).getroot()
+            total    += int(root.get("tests",    0))
+            failures += int(root.get("failures", 0))
+            errors   += int(root.get("errors",   0))
+            skipped  += int(root.get("skipped",  0))
+            for tc in root.findall(".//testcase"):
+              for child in tc:
+                if child.tag in ("failure", "error"):
+                  cls  = tc.get("classname", "")
+                  name = tc.get("name", "")
+                  msg  = (child.get("message") or child.text or "").split("\n")[0][:150]
+                  msg  = msg.replace("|", "\\|")
+                  failed_tests.append((f"{cls}.{name}" if cls else name, msg))
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write("## Unit Test Results\n\n")
+            if not files:
+              f.write("No unit test result files were found.\n")
+            else:
+              fail_icon = " ❌" if (failures + errors) else ""
+              f.write("| Metric | Value |\n")
+              f.write("|--------|-------|\n")
+              f.write(f"| Tests | {total} |\n")
+              f.write(f"| Failures{fail_icon} | {failures} |\n")
+              f.write(f"| Errors{fail_icon} | {errors} |\n")
+              f.write(f"| Skipped | {skipped} |\n")
+              if failed_tests:
+                f.write("\n### ❌ Failing Unit Tests\n\n")
+                f.write("| Test | Reason |\n")
+                f.write("|------|--------|\n")
+                for test_name, msg in failed_tests:
+                  f.write(f"| `{test_name}` | {msg} |\n")
 
       - name: Upload unit test artifacts
         if: always()
@@ -92,6 +105,15 @@ jobs:
             **/build/test-results/test/**
             **/build/reports/tests/test/**
 
+      - name: Publish unit test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Unit Tests
+          path: "**/build/test-results/test/TEST-*.xml"
+          reporter: java-junit
+          fail-on-error: false
+
       - name: Run integration tests
         id: integration_tests
         if: always()
@@ -100,41 +122,47 @@ jobs:
 
       - name: Summarize integration test results
         if: always()
+        shell: python3 {0}
         run: |
-          shopt -s nullglob globstar
-          files=(**/build/test-results/integrationTest/TEST-*.xml)
-          total=0
-          failures=0
-          errors=0
-          skipped=0
+          import glob, os, xml.etree.ElementTree as ET
 
-          for file in "${files[@]}"; do
-            attrs=$(sed -n 's/.*tests="\([0-9]\+\)".*failures="\([0-9]\+\)".*errors="\([0-9]\+\)".*skipped="\([0-9]\+\)".*/\1 \2 \3 \4/p' "$file" | head -n 1)
-            if [[ -n "$attrs" ]]; then
-              read -r t f e s <<< "$attrs"
-              total=$((total + t))
-              failures=$((failures + f))
-              errors=$((errors + e))
-              skipped=$((skipped + s))
-            fi
-          done
+          files = sorted(glob.glob("**/build/test-results/integrationTest/TEST-*.xml", recursive=True))
+          total = failures = errors = skipped = 0
+          failed_tests = []
 
-          {
-            echo ""
-            echo "## Integration Test Results"
-            if (( ${#files[@]} == 0 )); then
-              echo ""
-              echo "No integration test result files were found."
-            else
-              echo ""
-              echo "| Metric | Value |"
-              echo "|--------|-------|"
-              echo "| Tests | $total |"
-              echo "| Failures | $failures |"
-              echo "| Errors | $errors |"
-              echo "| Skipped | $skipped |"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          for path in files:
+            root = ET.parse(path).getroot()
+            total    += int(root.get("tests",    0))
+            failures += int(root.get("failures", 0))
+            errors   += int(root.get("errors",   0))
+            skipped  += int(root.get("skipped",  0))
+            for tc in root.findall(".//testcase"):
+              for child in tc:
+                if child.tag in ("failure", "error"):
+                  cls  = tc.get("classname", "")
+                  name = tc.get("name", "")
+                  msg  = (child.get("message") or child.text or "").split("\n")[0][:150]
+                  msg  = msg.replace("|", "\\|")
+                  failed_tests.append((f"{cls}.{name}" if cls else name, msg))
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write("\n## Integration Test Results\n\n")
+            if not files:
+              f.write("No integration test result files were found.\n")
+            else:
+              fail_icon = " ❌" if (failures + errors) else ""
+              f.write("| Metric | Value |\n")
+              f.write("|--------|-------|\n")
+              f.write(f"| Tests | {total} |\n")
+              f.write(f"| Failures{fail_icon} | {failures} |\n")
+              f.write(f"| Errors{fail_icon} | {errors} |\n")
+              f.write(f"| Skipped | {skipped} |\n")
+              if failed_tests:
+                f.write("\n### ❌ Failing Integration Tests\n\n")
+                f.write("| Test | Reason |\n")
+                f.write("|------|--------|\n")
+                for test_name, msg in failed_tests:
+                  f.write(f"| `{test_name}` | {msg} |\n")
 
       - name: Upload integration test artifacts
         if: always()
@@ -145,6 +173,97 @@ jobs:
           path: |
             **/build/test-results/integrationTest/**
             **/build/reports/tests/integrationTest/**
+
+      - name: Publish integration test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Integration Tests
+          path: "**/build/test-results/integrationTest/TEST-*.xml"
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Detect contract test task
+        id: detect_contract
+        if: always()
+        run: |
+          if ./gradlew help --task "${{ inputs.contract-test-task }}" > /dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run contract tests
+        id: contract_tests
+        if: always() && steps.detect_contract.outputs.found == 'true'
+        continue-on-error: true
+        run: ./gradlew ${{ inputs.contract-test-task }} ${{ inputs.gradle-args }}
+
+      - name: Summarize contract test results
+        if: always() && steps.detect_contract.outputs.found == 'true'
+        shell: python3 {0}
+        env:
+          TASK_NAME: ${{ inputs.contract-test-task }}
+        run: |
+          import glob, os, xml.etree.ElementTree as ET
+
+          task  = os.environ["TASK_NAME"]
+          files = sorted(glob.glob(f"**/build/test-results/{task}/TEST-*.xml", recursive=True))
+          total = failures = errors = skipped = 0
+          failed_tests = []
+
+          for path in files:
+            root = ET.parse(path).getroot()
+            total    += int(root.get("tests",    0))
+            failures += int(root.get("failures", 0))
+            errors   += int(root.get("errors",   0))
+            skipped  += int(root.get("skipped",  0))
+            for tc in root.findall(".//testcase"):
+              for child in tc:
+                if child.tag in ("failure", "error"):
+                  cls  = tc.get("classname", "")
+                  name = tc.get("name", "")
+                  msg  = (child.get("message") or child.text or "").split("\n")[0][:150]
+                  msg  = msg.replace("|", "\\|")
+                  failed_tests.append((f"{cls}.{name}" if cls else name, msg))
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write("\n## Contract Test Results\n\n")
+            if not files:
+              f.write("No contract test result files were found.\n")
+            else:
+              fail_icon = " ❌" if (failures + errors) else ""
+              f.write("| Metric | Value |\n")
+              f.write("|--------|-------|\n")
+              f.write(f"| Tests | {total} |\n")
+              f.write(f"| Failures{fail_icon} | {failures} |\n")
+              f.write(f"| Errors{fail_icon} | {errors} |\n")
+              f.write(f"| Skipped | {skipped} |\n")
+              if failed_tests:
+                f.write("\n### ❌ Failing Contract Tests\n\n")
+                f.write("| Test | Reason |\n")
+                f.write("|------|--------|\n")
+                for test_name, msg in failed_tests:
+                  f.write(f"| `{test_name}` | {msg} |\n")
+
+      - name: Upload contract test artifacts
+        if: always() && steps.detect_contract.outputs.found == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: contract-test-results
+          if-no-files-found: ignore
+          path: |
+            **/build/test-results/${{ inputs.contract-test-task }}/**
+            **/build/reports/tests/${{ inputs.contract-test-task }}/**
+
+      - name: Publish contract test report
+        uses: dorny/test-reporter@v1
+        if: always() && steps.detect_contract.outputs.found == 'true'
+        with:
+          name: Contract Tests
+          path: "**/build/test-results/${{ inputs.contract-test-task }}/TEST-*.xml"
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Fail if any test suite failed
         if: always()
@@ -158,6 +277,11 @@ jobs:
 
           if [[ "${{ steps.integration_tests.outcome }}" != "success" ]]; then
             echo "Integration tests failed."
+            failed=1
+          fi
+
+          if [[ "${{ steps.contract_tests.outcome }}" == "failure" ]]; then
+            echo "Contract tests failed."
             failed=1
           fi
 

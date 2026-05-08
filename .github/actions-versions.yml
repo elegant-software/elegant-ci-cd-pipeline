@@ -91,3 +91,7 @@ actions:
   JetBrains/qodana-action:
     version: v2025.3.2
     description: Run JetBrains Qodana static code analysis and quality gate
+
+  dorny/test-reporter:
+    version: v1
+    description: Publish JUnit XML test results as a GitHub Check with per-test pass/fail annotations
