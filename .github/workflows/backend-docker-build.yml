@@ -101,6 +101,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Generate artifact attestation
+        if: false # disabled as it is not supported in private-repo with my plan
         uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image-name }}
