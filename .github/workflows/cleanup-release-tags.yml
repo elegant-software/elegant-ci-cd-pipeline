@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Validate inputs and compute cutoff date
         id: validate
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const olderThanDays = Number(${{ inputs.older_than_days }});
@@ -47,7 +47,7 @@ jobs:
             core.setOutput('cutoff', cutoff.toISOString());
 
       - name: Delete stale releases and their paired tags
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const cutoff = new Date('${{ steps.validate.outputs.cutoff }}');
@@ -94,7 +94,7 @@ jobs:
             }
 
       - name: Delete orphaned tags with no matching release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const cutoff = new Date('${{ steps.validate.outputs.cutoff }}');

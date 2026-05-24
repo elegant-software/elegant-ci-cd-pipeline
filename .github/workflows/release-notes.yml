@@ -149,7 +149,7 @@ jobs:
 
       - name: Evaluate merged pull requests and build release notes
         id: evaluate
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           WORKFLOW_BASE_BRANCH: ${{ inputs.base_branch }}
           WORKFLOW_RELEASE_BOUNDARY: ${{ inputs.release_boundary }}
@@ -419,7 +419,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create release tag and GitHub Release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           NEXT_VERSION: ${{ needs.generate.outputs.next_version }}
           RELEASE_NOTES_MARKDOWN: ${{ needs.generate.outputs.release_notes_markdown }}
