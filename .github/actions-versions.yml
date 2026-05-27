@@ -54,6 +54,10 @@ actions:
     version: v7
     description: Upload build artifacts (test reports, JARs) for later download
 
+  actions/download-artifact:
+    version: v7
+    description: Download artifacts created by earlier workflow jobs
+
   actions/attest-build-provenance:
     version: v4
     description: Generate signed SLSA provenance attestations for build artifacts

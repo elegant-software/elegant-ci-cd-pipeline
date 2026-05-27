@@ -1,0 +1,132 @@
+name: Manual Release
+
+on:
+  workflow_call:
+    inputs:
+      release_boundary:
+        description: Tag to diff from. Leave blank to use the latest semantic version tag.
+        required: false
+        type: string
+        default: ''
+      base_branch:
+        description: Branch to check for changes after the release boundary.
+        required: false
+        type: string
+        default: main
+      automation_ref:
+        description: Ref of elegant-ci-cd-pipeline containing the release scripts. Pin this with the workflow ref for production callers.
+        required: false
+        type: string
+        default: main
+    secrets:
+      RELEASE_PUBLISH_TOKEN:
+        description: Token permitted to create tags and releases in the calling repository.
+        required: true
+      AUTOMATION_READ_TOKEN:
+        description: Optional read-only token used to check out this repository when it is private or internal.
+        required: false
+    outputs:
+      release_required:
+        description: Whether a release was published or was eligible for publication.
+        value: ${{ jobs.plan.outputs.release_required }}
+
+permissions: {}
+
+concurrency:
+  group: manual-release-${{ github.repository }}-${{ inputs.base_branch }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release_required: ${{ steps.evaluate.outputs.release_required }}
+    steps:
+      - name: Checkout calling repository history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Checkout centralized release automation
+        uses: actions/checkout@v6
+        with:
+          repository: elegant-software/elegant-ci-cd-pipeline
+          ref: ${{ inputs.automation_ref }}
+          token: ${{ secrets.AUTOMATION_READ_TOKEN || github.token }}
+          path: .release-automation
+          persist-credentials: false
+
+      - name: Test release automation modules
+        run: node --test .release-automation/.github/scripts/release/*.test.*
+
+      - name: Build release plan from commits after boundary
+        id: evaluate
+        env:
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          RELEASE_BOUNDARY: ${{ inputs.release_boundary }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: node .release-automation/.github/scripts/release/evaluate-release.mjs
+
+      - name: Add plan to workflow summary
+        env:
+          RELEASE_REQUIRED: ${{ steps.evaluate.outputs.release_required }}
+          VERSION_BUMP: ${{ steps.evaluate.outputs.version_bump }}
+          NEXT_VERSION: ${{ steps.evaluate.outputs.next_version }}
+          CHANGED_COMMIT_COUNT: ${{ steps.evaluate.outputs.changed_commit_count }}
+          DECISION_REASON: ${{ steps.evaluate.outputs.decision_reason }}
+        run: |
+          {
+          echo "## Manual release plan"
+          echo
+          echo '```text'
+          echo "release_required : $RELEASE_REQUIRED"
+          echo "version_bump     : $VERSION_BUMP"
+          echo "next_version     : $NEXT_VERSION"
+          echo "changed commits  : $CHANGED_COMMIT_COUNT"
+          echo "decision_reason  : $DECISION_REASON"
+          echo '```'
+          echo
+          cat release-output/release-notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release plan
+        if: steps.evaluate.outputs.release_required == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: manual-release-plan
+          path: release-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.release_required == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout centralized release automation
+        uses: actions/checkout@v6
+        with:
+          repository: elegant-software/elegant-ci-cd-pipeline
+          ref: ${{ inputs.automation_ref }}
+          token: ${{ secrets.AUTOMATION_READ_TOKEN || github.token }}
+          path: .release-automation
+          persist-credentials: false
+
+      - name: Download release plan
+        uses: actions/download-artifact@v7
+        with:
+          name: manual-release-plan
+          path: release-output/
+
+      - name: Create release tag and GitHub Release
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.RELEASE_PUBLISH_TOKEN }}
+          script: |
+            const publishRelease = require("./.release-automation/.github/scripts/release/publish-release.cjs");
+            await publishRelease({ github, context, core });
