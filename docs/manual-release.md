@@ -32,6 +32,8 @@ permissions:
 
 jobs:
   manual-release:
+    permissions:
+      contents: read
     uses: elegant-software/elegant-ci-cd-pipeline/.github/workflows/manual-release.yml@main
     with:
       release_boundary: ${{ inputs.release_boundary }}
