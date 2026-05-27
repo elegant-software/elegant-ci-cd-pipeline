@@ -27,7 +27,8 @@ on:
         type: string
         default: main
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   manual-release:
