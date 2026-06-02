@@ -73,6 +73,10 @@ on:
       decision_reason:
         description: Human-readable explanation of the release decision
         value: ${{ jobs.generate.outputs.decision_reason }}
+    secrets:
+      RELEASE_PUBLISH_TOKEN:
+        description: Optional token used to create tags and releases so downstream workflows can be triggered.
+        required: false
   workflow_dispatch:
     inputs:
       base_branch:
@@ -457,6 +461,7 @@ jobs:
           TARGET_SHA: ${{ needs.generate.outputs.target_sha }}
           RELEASE_NOTES_MARKDOWN: ${{ needs.generate.outputs.release_notes_markdown }}
         with:
+          github-token: ${{ secrets.RELEASE_PUBLISH_TOKEN || github.token }}
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -468,7 +473,8 @@ jobs:
               throw new Error("NEXT_VERSION output is empty while release_required=true.");
             }
 
-            const tagName = `v${nextVersion}`;
+            const releaseVersion = `${nextVersion}-alpha`;
+            const tagName = `v${releaseVersion}`;
 
             // Avoid duplicate failures when a prior run already published this version.
             let existingTag;
@@ -509,6 +515,7 @@ jobs:
                 name: releaseName,
                 body: releaseBody,
                 draft: true,
+                prerelease: true,
                 generate_release_notes: false,
               });
               core.info(`Created draft release ${tagName}.`);

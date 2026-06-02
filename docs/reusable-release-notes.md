@@ -23,7 +23,9 @@ The workflow emits:
 - `excluded_prs_with_reasons`
 - `decision_reason`
 
-When the workflow runs directly from a merged `pull_request` event, it resolves the latest reachable semantic version tag as the release boundary, evaluates only the merged pull request that triggered the event, and creates the resulting GitHub Release as a draft. Reusable `workflow_call` runs do not publish; they only return release-note and version outputs for the caller.
+When the workflow runs directly from a merged `pull_request` event, it resolves the latest reachable semantic version tag as the release boundary, evaluates only the merged pull request that triggered the event, and creates the resulting GitHub Release as a draft prerelease with an `-alpha` tag suffix, such as `v1.2.4-alpha`. Reusable `workflow_call` runs do not publish; they only return release-note and version outputs for the caller.
+
+If downstream CD must start from the generated alpha tag, configure `RELEASE_PUBLISH_TOKEN` as a GitHub App token or fine-grained personal access token. Events caused by the default `GITHUB_TOKEN` do not start another workflow run.
 
 ## Consumer Example
 
