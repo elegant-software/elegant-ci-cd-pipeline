@@ -16,11 +16,14 @@ The workflow emits:
 - `release_required`
 - `version_bump`
 - `next_version`
+- `target_sha`
 - `release_notes_markdown`
 - `release_notes_json`
 - `included_pr_count`
 - `excluded_prs_with_reasons`
 - `decision_reason`
+
+When the workflow runs directly from a merged `pull_request` event, it resolves the latest reachable semantic version tag as the release boundary, evaluates only the merged pull request that triggered the event, and creates the resulting GitHub Release as a draft. Reusable `workflow_call` runs do not publish; they only return release-note and version outputs for the caller.
 
 ## Consumer Example
 

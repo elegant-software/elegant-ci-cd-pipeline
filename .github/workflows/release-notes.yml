@@ -55,6 +55,9 @@ on:
       next_version:
         description: Next resolved version string
         value: ${{ jobs.generate.outputs.next_version }}
+      target_sha:
+        description: Commit SHA selected as the release target
+        value: ${{ jobs.generate.outputs.target_sha }}
       release_notes_markdown:
         description: Human-readable release notes
         value: ${{ jobs.generate.outputs.release_notes_markdown }}
@@ -132,10 +135,12 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     outputs:
       release_required: ${{ steps.evaluate.outputs.release_required }}
       version_bump: ${{ steps.evaluate.outputs.version_bump }}
       next_version: ${{ steps.evaluate.outputs.next_version }}
+      target_sha: ${{ steps.evaluate.outputs.target_sha }}
       release_notes_markdown: ${{ steps.evaluate.outputs.release_notes_markdown }}
       release_notes_json: ${{ steps.evaluate.outputs.release_notes_json }}
       included_pr_count: ${{ steps.evaluate.outputs.included_pr_count }}
@@ -217,8 +222,12 @@ jobs:
 
             function resolveReleaseBoundary(explicit, baseBranch) {
               if (explicit) return explicit;
+              const versionTagPattern = /^v?\d+\.\d+\.\d+(?:[-+].*)?$/;
               try {
-                return command(`git tag --merged origin/${baseBranch} --sort=-creatordate`).split("\n").find(Boolean) || "";
+                return command(`git tag --merged origin/${baseBranch} --sort=-v:refname`)
+                  .split("\n")
+                  .map((tag) => tag.trim())
+                  .find((tag) => versionTagPattern.test(tag)) || "";
               } catch {
                 return "";
               }
@@ -249,6 +258,15 @@ jobs:
                 }
               }
               return prMap;
+            }
+
+            async function fetchCurrentMergedPR(owner, repo, baseBranch) {
+              const pr = context.payload.pull_request;
+              if (!pr) return null;
+              if (!pr.merged || pr.base?.ref !== baseBranch) return null;
+
+              const { data } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+              return data.merged && data.base?.ref === baseBranch ? data : null;
             }
 
             // ─── Revert detection ────────────────────────────────────────────
@@ -347,10 +365,11 @@ jobs:
 
             // ─── Output emission ─────────────────────────────────────────────
 
-            function emitOutputs({ releaseRequired, highestImpact, nextVersion, releaseNotesMarkdown, releaseNotesJson, included, excluded }) {
+            function emitOutputs({ releaseRequired, highestImpact, nextVersion, targetSha, releaseNotesMarkdown, releaseNotesJson, included, excluded }) {
               core.setOutput("release_required", releaseRequired ? "true" : "false");
               core.setOutput("version_bump", releaseRequired ? highestImpact : "none");
               core.setOutput("next_version", nextVersion);
+              core.setOutput("target_sha", targetSha);
               core.setOutput("release_notes_markdown", releaseNotesMarkdown);
               core.setOutput("release_notes_json", releaseNotesJson);
               core.setOutput("included_pr_count", String(included.length));
@@ -363,6 +382,7 @@ jobs:
               core.info(`release_required=${releaseRequired ? "true" : "false"}`);
               core.info(`version_bump=${releaseRequired ? highestImpact : "none"}`);
               core.info(`next_version=${nextVersion}`);
+              core.info(`target_sha=${targetSha}`);
               core.info(`release_notes_markdown=${releaseNotesMarkdown}`);
               core.info(`release_notes_json=${releaseNotesJson}`);
               core.info(`included_pr_count=${String(included.length)}`);
@@ -386,12 +406,20 @@ jobs:
             const precedence = { none: 0, patch: 1, minor: 2, major: 3 };
 
             command("git fetch --tags --force");
-            command(`git fetch origin ${baseBranch} --depth=1`);
+            command(`git fetch origin +refs/heads/${baseBranch}:refs/remotes/origin/${baseBranch} --force`);
 
             const releaseBoundary = resolveReleaseBoundary((process.env.WORKFLOW_RELEASE_BOUNDARY || "").trim(), baseBranch);
-            const range = releaseBoundary ? `${releaseBoundary}..origin/${baseBranch}` : `origin/${baseBranch}`;
-            const shas = fetchCommitShas(range);
-            const prMap = await fetchMergedPRs(owner, repo, baseBranch, shas);
+            const prMap = new Map();
+            if (context.eventName === "pull_request") {
+              const currentPr = await fetchCurrentMergedPR(owner, repo, baseBranch);
+              if (currentPr) prMap.set(currentPr.number, currentPr);
+            } else {
+              const range = releaseBoundary ? `${releaseBoundary}..origin/${baseBranch}` : `origin/${baseBranch}`;
+              const shas = fetchCommitShas(range);
+              for (const [number, pr] of await fetchMergedPRs(owner, repo, baseBranch, shas)) {
+                prMap.set(number, pr);
+              }
+            }
             const pullRequests = Array.from(prMap.values()).sort((a, b) => new Date(a.merged_at) - new Date(b.merged_at));
 
             const { revertedNumbers, revertPrNumbers } = detectReverts(pullRequests, prMap);
@@ -400,6 +428,9 @@ jobs:
 
             const releaseRequired = included.length > 0;
             const nextVersion = releaseRequired ? formatVersion(bumpVersion(parseVersion(releaseBoundary), highestImpact)) : "";
+            const targetSha = context.eventName === "pull_request"
+              ? (context.payload.pull_request?.merge_commit_sha || context.sha)
+              : command(`git rev-parse origin/${baseBranch}`);
             const releaseNotesMarkdown = releaseRequired ? markdownLines.join("\n").trim() : "No releasable changes.";
             const releaseNotesJson = JSON.stringify({
               base_branch: baseBranch,
@@ -407,10 +438,11 @@ jobs:
               release_required: releaseRequired,
               version_bump: releaseRequired ? highestImpact : "none",
               next_version: nextVersion,
+              target_sha: targetSha,
               sections: sectionPayload,
             });
 
-            emitOutputs({ releaseRequired, highestImpact, nextVersion, releaseNotesMarkdown, releaseNotesJson, included, excluded });
+            emitOutputs({ releaseRequired, highestImpact, nextVersion, targetSha, releaseNotesMarkdown, releaseNotesJson, included, excluded });
             return releaseNotesMarkdown;
 
   publish:
@@ -422,12 +454,14 @@ jobs:
         uses: actions/github-script@v8
         env:
           NEXT_VERSION: ${{ needs.generate.outputs.next_version }}
+          TARGET_SHA: ${{ needs.generate.outputs.target_sha }}
           RELEASE_NOTES_MARKDOWN: ${{ needs.generate.outputs.release_notes_markdown }}
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const nextVersion = (process.env.NEXT_VERSION || "").trim();
+            const targetSha = (process.env.TARGET_SHA || context.sha).trim();
             const releaseNotesMarkdown = process.env.RELEASE_NOTES_MARKDOWN || "";
 
             if (!nextVersion) {
@@ -437,26 +471,30 @@ jobs:
             const tagName = `v${nextVersion}`;
 
             // Avoid duplicate failures when a prior run already published this version.
-            let tagExists = false;
+            let existingTag;
             try {
-              await github.rest.git.getRef({
+              const response = await github.rest.git.getRef({
                 owner,
                 repo,
                 ref: `tags/${tagName}`,
               });
-              tagExists = true;
+              existingTag = response.data;
             } catch (error) {
               if (error.status !== 404) {
                 throw error;
               }
             }
 
-            if (!tagExists) {
+            if (existingTag && existingTag.object.sha !== targetSha) {
+              throw new Error(`Tag ${tagName} already exists at a different commit than the release target.`);
+            }
+
+            if (!existingTag) {
               await github.rest.git.createRef({
                 owner,
                 repo,
                 ref: `refs/tags/${tagName}`,
-                sha: context.sha,
+                sha: targetSha,
               });
             }
 
@@ -470,9 +508,10 @@ jobs:
                 tag_name: tagName,
                 name: releaseName,
                 body: releaseBody,
+                draft: true,
                 generate_release_notes: false,
               });
-              core.info(`Created release ${tagName}.`);
+              core.info(`Created draft release ${tagName}.`);
             } catch (error) {
               if (error.status === 422) {
                 core.info(`Release ${tagName} already exists. Skipping creation.`);
