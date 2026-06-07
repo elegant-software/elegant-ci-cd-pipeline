@@ -118,13 +118,13 @@ jobs:
           persist-credentials: false
 
       - name: Download release plan
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: manual-release-plan
           path: release-output/
 
       - name: Create release tag and GitHub Release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.RELEASE_PUBLISH_TOKEN }}
           script: |
