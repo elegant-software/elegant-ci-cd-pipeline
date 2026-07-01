@@ -18,6 +18,16 @@ on:
         required: false
         type: string
         default: main
+      version_suffix:
+        description: Suffix appended to the computed version (e.g. -alpha). Leave blank for production releases.
+        required: false
+        type: string
+        default: ''
+      prerelease:
+        description: Mark the GitHub release as a pre-release.
+        required: false
+        type: boolean
+        default: false
     secrets:
       RELEASE_PUBLISH_TOKEN:
         description: Token permitted to create tags and releases in the calling repository.
@@ -68,6 +78,8 @@ jobs:
           BASE_BRANCH: ${{ inputs.base_branch }}
           RELEASE_BOUNDARY: ${{ inputs.release_boundary }}
           REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+          VERSION_SUFFIX: ${{ inputs.version_suffix }}
+          PRERELEASE: ${{ inputs.prerelease }}
         run: node .release-automation/.github/scripts/release/evaluate-release.mjs
 
       - name: Add plan to workflow summary

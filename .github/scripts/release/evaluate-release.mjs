@@ -65,6 +65,8 @@ function main() {
   const branch = (process.env.BASE_BRANCH || "main").trim();
   const requestedBoundary = (process.env.RELEASE_BOUNDARY || "").trim();
   const repositoryUrl = String(process.env.REPOSITORY_URL || "").replace(/\/$/, "");
+  const versionSuffix = (process.env.VERSION_SUFFIX || "").trim();
+  const prerelease = process.env.PRERELEASE === "true";
   const targetRef = `origin/${branch}`;
 
   if (!repositoryUrl) throw new Error("REPOSITORY_URL is required.");
@@ -91,6 +93,11 @@ function main() {
   const range = boundary ? `${boundary}..${targetRef}` : targetRef;
   const commits = readCommits(range);
   const plan = buildReleasePlan({ branch, boundary, targetSha, commits, repositoryUrl });
+
+  if (versionSuffix && plan.nextVersion) {
+    plan.nextVersion = `${plan.nextVersion}${versionSuffix}`;
+  }
+  plan.prerelease = prerelease;
 
   writeOutputs(plan);
   writeReleaseFiles(plan);

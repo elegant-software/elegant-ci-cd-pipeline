@@ -40,6 +40,7 @@ module.exports = async function publishRelease({ github, context, core }) {
       name: tagName,
       body: releaseNotesMarkdown || "No release notes generated.",
       generate_release_notes: false,
+      prerelease: plan.prerelease || false,
     });
     core.info(`Created release ${tagName}.`);
   } catch (error) {
