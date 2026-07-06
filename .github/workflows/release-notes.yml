@@ -45,6 +45,16 @@ on:
         required: false
         default: true
         type: boolean
+      version_suffix:
+        description: Suffix appended to the computed version (e.g. -alpha). Leave blank for production releases.
+        required: false
+        default: ""
+        type: string
+      prerelease:
+        description: Mark the GitHub release as a pre-release.
+        required: false
+        default: false
+        type: boolean
     outputs:
       release_required:
         description: Whether any releasable changes remain after filtering
@@ -126,6 +136,16 @@ on:
         description: Include author names in markdown output
         required: false
         default: true
+        type: boolean
+      version_suffix:
+        description: Suffix appended to the computed version (e.g. -alpha). Leave blank for production releases.
+        required: false
+        default: ""
+        type: string
+      prerelease:
+        description: Mark the GitHub release as a pre-release.
+        required: false
+        default: false
         type: boolean
 
   pull_request:
@@ -460,6 +480,8 @@ jobs:
           NEXT_VERSION: ${{ needs.generate.outputs.next_version }}
           TARGET_SHA: ${{ needs.generate.outputs.target_sha }}
           RELEASE_NOTES_MARKDOWN: ${{ needs.generate.outputs.release_notes_markdown }}
+          VERSION_SUFFIX: ${{ inputs.version_suffix }}
+          PRERELEASE: ${{ inputs.prerelease }}
         with:
           github-token: ${{ secrets.RELEASE_PUBLISH_TOKEN || github.token }}
           script: |
@@ -468,12 +490,14 @@ jobs:
             const nextVersion = (process.env.NEXT_VERSION || "").trim();
             const targetSha = (process.env.TARGET_SHA || context.sha).trim();
             const releaseNotesMarkdown = process.env.RELEASE_NOTES_MARKDOWN || "";
+            const versionSuffix = (process.env.VERSION_SUFFIX || "").trim();
+            const prerelease = String(process.env.PRERELEASE || "false").toLowerCase() === "true";
 
             if (!nextVersion) {
               throw new Error("NEXT_VERSION output is empty while release_required=true.");
             }
 
-            const releaseVersion = `${nextVersion}-alpha`;
+            const releaseVersion = `${nextVersion}${versionSuffix}`;
             const tagName = `v${releaseVersion}`;
 
             // Avoid duplicate failures when a prior run already published this version.
@@ -515,7 +539,7 @@ jobs:
                 name: releaseName,
                 body: releaseBody,
                 draft: true,
-                prerelease: true,
+                prerelease,
                 generate_release_notes: false,
               });
               core.info(`Created draft release ${tagName}.`);
