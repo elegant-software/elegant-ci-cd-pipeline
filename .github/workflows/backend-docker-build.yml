@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: ''
+      platforms:
+        description: 'Target image platforms, comma-separated (e.g. linux/amd64,linux/arm64)'
+        required: false
+        type: string
+        default: 'linux/amd64'
     outputs:
       image-uri:
         description: 'Full image URI'
@@ -66,6 +71,10 @@ jobs:
       - name: Build application
         run: ./gradlew build -x test ${{ inputs.gradle-args }}
 
+      - name: Set up QEMU
+        if: contains(inputs.platforms, 'arm64')
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -94,6 +103,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: ${{ inputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
