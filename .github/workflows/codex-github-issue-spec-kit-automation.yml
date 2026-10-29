@@ -81,7 +81,7 @@ jobs:
     steps:
       - name: Evaluate issue body and build prompt
         id: evaluate
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DISPATCH_ISSUE_NUMBER: ${{ inputs.issue_number || github.event.inputs.issue_number || github.event.client_payload.issue_number || github.event.client_payload.issue.number || '' }}
           DISPATCH_PROJECT_STATUS: ${{ github.event.client_payload.project_status || github.event.client_payload.status || github.event.client_payload.field_value || github.event.client_payload.to_status || '' }}
@@ -483,7 +483,7 @@ jobs:
     steps:
       - name: Publish visible issue outcome
         id: report
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DISPATCH_ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || github.event.client_payload.issue_number || github.event.client_payload.issue.number || github.event.inputs.issue_number || '' }}
           EVALUATE_STATUS: ${{ needs.evaluate.outputs.status }}

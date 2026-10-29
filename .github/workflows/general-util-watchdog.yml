@@ -19,7 +19,7 @@ jobs:
         run: sleep $(( ${{ inputs.wait-minutes }} * 60 ))
 
       - name: Cancel workflow if self-hosted job did not start
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const run_id = process.env.GITHUB_RUN_ID;

@@ -55,13 +55,13 @@ jobs:
       release_required: ${{ steps.evaluate.outputs.release_required }}
     steps:
       - name: Checkout calling repository history
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
 
       - name: Checkout centralized release automation
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: elegant-software/elegant-ci-cd-pipeline
           ref: ${{ inputs.automation_ref }}
@@ -121,7 +121,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout centralized release automation
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: elegant-software/elegant-ci-cd-pipeline
           ref: ${{ inputs.automation_ref }}
@@ -130,13 +130,13 @@ jobs:
           persist-credentials: false
 
       - name: Download release plan
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: manual-release-plan
           path: release-output/
 
       - name: Create release tag and GitHub Release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.RELEASE_PUBLISH_TOKEN }}
           script: |
