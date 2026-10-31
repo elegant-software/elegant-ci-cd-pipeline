@@ -1,4 +1,4 @@
-name: CI - Action Version Drift Check
+name: CI · Action Version Drift Check
 
 on:
   pull_request:

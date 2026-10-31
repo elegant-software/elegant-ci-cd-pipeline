@@ -3,19 +3,21 @@
 #               https://www.jetbrains.com/help/qodana/github.html               #
 #-------------------------------------------------------------------------------#
 
-name: Qodana
+name: CI · Qodana Code Quality
 on:
   workflow_call:
 
 jobs:
   qodana:
+    name: Qodana scan
     runs-on: self-hosted
     permissions:
       contents: write
       pull-requests: write
       checks: write
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -35,6 +37,7 @@ jobs:
           # quick-fixes available in Ultimate and Ultimate Plus plans
           push-fixes: 'none'
   watchdog:
+    name: Watchdog
     uses: ./.github/workflows/general-util-watchdog.yml
     with:
          wait-minutes: 15

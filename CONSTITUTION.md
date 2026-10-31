@@ -2,31 +2,16 @@
 
 ## 1. GitHub Actions Naming Convention
 
-### Workflow File Naming
-- Use kebab-case
-- Use prefixes: ci-, cd-, cleanup-, reusable-
+Full rules, examples, and a new-workflow checklist: [`docs/github-actions-conventions.md`](docs/github-actions-conventions.md).
+They apply to this repository and to every repository that calls its workflows.
 
-Examples:
-- ci-build.yml
-- cd-deploy.yml
-- cleanup-workflow-runs.yml
-- reusable-cleanup-workflow-runs.yml
-
-### Workflow Display Name
-```yaml
-name: Cleanup old and failed workflow runs
-```
-
-### Job Naming
-```yaml
-jobs:
-  cleanup-runs:
-```
-
-### Step Naming
-```yaml
-- name: Delete old workflow runs
-```
+- **File names**: kebab-case with a category prefix: `ci-`, `cd-`, `release-`, `pr-`, `cleanup-`, `automation-`.
+  Reusable workflows in this repository keep their existing file names, because callers reference them by path.
+- **Workflow `name:`**: `<Category> · <What>` (e.g. `Cleanup · Releases & Tags`).
+- **`run-name:`**: required for dispatch, schedule, release, and repository-dispatch triggers; states the subject and, for destructive runs, `Scheduled|Manual · Dry run|LIVE`.
+- **Job `name:`**: always set. Caller jobs use a short noun (GitHub shows `<caller> / <called>`); reusable or plain jobs use action + key parameters, and destructive jobs say `Preview …` vs `Delete …`.
+- **Step `name:`**: imperative, sentence case, e.g. `- name: Delete old workflow runs`.
+- **Results**: write what changed to `$GITHUB_STEP_SUMMARY` and emit one headline `notice` per job.
 
 ---
 

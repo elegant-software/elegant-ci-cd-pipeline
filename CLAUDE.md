@@ -55,7 +55,7 @@ Features are tracked in `specs/NNN-feature-name/` with spec, plan, tasks, and ch
 
 ## Conventions (from CONSTITUTION.md)
 
-- **Workflow file names**: kebab-case with prefixes (`ci-`, `cd-`, `cleanup-`, `reusable-`)
+- **Workflow naming & reporting**: follow [`docs/github-actions-conventions.md`](docs/github-actions-conventions.md): category-prefixed files, `<Category> · <What>` names, `run-name` on dispatch/schedule, named jobs with parameters, results in the job summary
 - **Secrets**: `UPPER_SNAKE_CASE` (e.g. `GHCR_TOKEN`, `AWS_ACCESS_KEY_ID`)
 - **Environments**: lowercase only (`dev`, `test`, `staging`, `prod`)
 - **Docker**: no wildcards in `COPY`; Gradle artifact must be named `app.jar`; use deterministic image tags, not filename versioning

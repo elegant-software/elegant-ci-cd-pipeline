@@ -1,4 +1,5 @@
-name: Reusable Release Notes
+name: Release · Notes
+run-name: "Release notes from ${{ inputs.base_branch || 'main' }}"
 
 on:
   workflow_call:
@@ -158,6 +159,7 @@ permissions:
 
 jobs:
   generate:
+    name: Evaluate merged PRs on ${{ inputs.base_branch || 'main' }}
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     outputs:
@@ -469,7 +471,29 @@ jobs:
             emitOutputs({ releaseRequired, highestImpact, nextVersion, targetSha, releaseNotesMarkdown, releaseNotesJson, included, excluded });
             return releaseNotesMarkdown;
 
+      - name: Add release decision to job summary
+        env:
+          RELEASE_REQUIRED: ${{ steps.evaluate.outputs.release_required }}
+          NEXT_VERSION: ${{ steps.evaluate.outputs.next_version }}
+          VERSION_BUMP: ${{ steps.evaluate.outputs.version_bump }}
+          INCLUDED_PR_COUNT: ${{ steps.evaluate.outputs.included_pr_count }}
+          DECISION_REASON: ${{ steps.evaluate.outputs.decision_reason }}
+          RELEASE_NOTES_MARKDOWN: ${{ steps.evaluate.outputs.release_notes_markdown }}
+        run: |
+          if [ "$RELEASE_REQUIRED" = "true" ]; then
+            headline="📦 Release v${NEXT_VERSION} (${VERSION_BUMP} bump, ${INCLUDED_PR_COUNT} PRs)"
+          else
+            headline="⏭️ No release: ${DECISION_REASON}"
+          fi
+          {
+            echo "### ${headline}"
+            echo
+            echo "${RELEASE_NOTES_MARKDOWN}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Release decision::${headline}"
+
   publish:
+    name: Publish v${{ needs.generate.outputs.next_version }}${{ inputs.version_suffix }}
     needs: generate
     if: needs.generate.outputs.release_required == 'true' && github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
@@ -543,6 +567,7 @@ jobs:
                 generate_release_notes: false,
               });
               core.info(`Created draft release ${tagName}.`);
+              await core.summary.addHeading(`🏷️ Created draft release ${tagName}`, 3).write();
             } catch (error) {
               if (error.status === 422) {
                 core.info(`Release ${tagName} already exists. Skipping creation.`);

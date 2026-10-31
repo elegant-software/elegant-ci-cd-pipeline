@@ -258,4 +258,5 @@ jobs:
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md) for repository architecture and commit rules
 - [docs/reusable-release-notes.md](./docs/reusable-release-notes.md) for release-note workflow behavior
+- [docs/github-actions-conventions.md](./docs/github-actions-conventions.md) for workflow naming, run titles, job summaries, and annotations
 - [docs/release-policy.md](./docs/release-policy.md) for semantic version and labeling policy

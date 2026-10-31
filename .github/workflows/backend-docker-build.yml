@@ -1,4 +1,4 @@
-name: Build Application Image
+name: CD · Build Application Image
 
 on:
   workflow_call:
@@ -48,6 +48,7 @@ permissions:
 
 jobs:
   build:
+    name: Build ${{ inputs.image-name }}:${{ inputs.image-tag }}
     runs-on: ubuntu-latest
 
     outputs:
@@ -117,3 +118,22 @@ jobs:
           subject-name: ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image-name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - name: Add image to job summary
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          {
+            echo "### 🐳 Built \`${{ inputs.image-name }}:${{ inputs.image-tag }}\`"
+            echo "| Digest | Platforms |"
+            echo "|---|---|"
+            echo "| \`${DIGEST}\` | ${PLATFORMS} |"
+            echo
+            echo "**Tags pushed**"
+            echo '```'
+            echo "${TAGS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Image pushed::${{ inputs.image-name }}:${{ inputs.image-tag }} (${DIGEST})"

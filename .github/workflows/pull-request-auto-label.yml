@@ -1,4 +1,4 @@
-name: Auto-Label Pull Requests
+name: PR · Auto-Label
 
 on:
   workflow_call:
@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   label:
-    name: Apply Labels
+    name: Label PR #${{ inputs.pr_number || github.event.pull_request.number }}
     runs-on: ubuntu-latest
 
     steps:

@@ -1,4 +1,4 @@
-name: Dependency track & SBOM upload
+name: CI · Dependency-Track SBOM Upload
 
 on:
   workflow_call:
@@ -10,7 +10,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -30,6 +31,7 @@ jobs:
           DT_URL: http://myserver:8181
           DT_API_KEY: ${{ secrets.DT_API_KEY }}
   watchdog:
+    name: Watchdog
     uses: ./.github/workflows/general-util-watchdog.yml
     permissions:
       actions: write

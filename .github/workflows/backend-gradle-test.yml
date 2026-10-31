@@ -1,4 +1,4 @@
-name: Backend Gradle Tests
+name: CI · Backend Gradle Tests
 
 on:
   workflow_call:
@@ -26,6 +26,7 @@ on:
 
 jobs:
   test:
+    name: Run Gradle test suites
     runs-on: ubuntu-latest
 
     permissions:
