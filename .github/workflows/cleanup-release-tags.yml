@@ -28,6 +28,7 @@ permissions:
 
 jobs:
   cleanup:
+    name: ${{ inputs.dry_run && 'Preview' || 'Delete' }} releases & tags older than ${{ inputs.older_than_days }}d
     runs-on: ubuntu-latest
 
     steps:
@@ -68,12 +69,16 @@ jobs:
 
             core.info(`${releases.length} total releases — ${candidates.length} matched for deletion`);
 
+            const rows = [];
             for (const release of candidates) {
+              const type = release.draft ? 'draft' : release.prerelease ? 'pre-release' : 'release';
+              const row = (result) => rows.push([release.tag_name, type, release.created_at.slice(0, 10), result]);
               const info = `release_id=${release.id}, tag=${release.tag_name}, created_at=${release.created_at}`;
 
               if (dryRun) {
                 core.info(`[DRY RUN] Would delete release: ${info}`);
                 core.info(`[DRY RUN] Would delete paired tag: tags/${release.tag_name}`);
+                row('would delete');
                 continue;
               }
 
@@ -82,16 +87,32 @@ jobs:
                 core.info(`Deleted release: ${info}`);
               } catch (err) {
                 core.warning(`Failed to delete release ${release.id}: ${err.message}`);
+                row(`❌ ${err.message}`);
                 continue;
               }
 
               try {
                 await github.rest.git.deleteRef({ owner, repo, ref: `tags/${release.tag_name}` });
                 core.info(`Deleted paired tag: tags/${release.tag_name}`);
+                row('✅ deleted');
               } catch (err) {
                 core.warning(`Failed to delete tag ${release.tag_name}: ${err.message}`);
+                row(`⚠️ release deleted, tag failed: ${err.message}`);
               }
             }
+
+            const verb = dryRun ? 'Would delete' : 'Deleted';
+            core.notice(`${verb} ${rows.length} of ${releases.length} releases (cutoff ${cutoff.toISOString().slice(0, 10)})`);
+            core.summary
+              .addHeading(`${dryRun ? '🔍 Dry run — ' : '🗑️ '}Releases older than ${cutoff.toISOString().slice(0, 10)}`, 3)
+              .addRaw(`${rows.length} of ${releases.length} releases matched.`, true);
+            if (rows.length) {
+              core.summary.addTable([
+                ['Tag', 'Type', 'Created', 'Result'].map((data) => ({ data, header: true })),
+                ...rows
+              ]);
+            }
+            await core.summary.write();
 
       - name: Delete orphaned tags with no matching release
         uses: actions/github-script@v8
@@ -111,6 +132,7 @@ jobs:
 
             core.info(`${allTags.length} total tags — ${orphans.length} orphaned (no matching release)`);
 
+            const rows = [];
             for (const tag of orphans) {
               let tagDate;
               try {
@@ -134,13 +156,29 @@ jobs:
 
               if (dryRun) {
                 core.info(`[DRY RUN] Would delete orphaned tag: ${tag.name} (dated ${tagDate.toISOString()})`);
+                rows.push([tag.name, tagDate.toISOString().slice(0, 10), 'would delete']);
                 continue;
               }
 
               try {
                 await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag.name}` });
                 core.info(`Deleted orphaned tag: ${tag.name} (dated ${tagDate.toISOString()})`);
+                rows.push([tag.name, tagDate.toISOString().slice(0, 10), '✅ deleted']);
               } catch (err) {
                 core.warning(`Failed to delete orphaned tag ${tag.name}: ${err.message}`);
+                rows.push([tag.name, tagDate.toISOString().slice(0, 10), `❌ ${err.message}`]);
               }
             }
+
+            const verb = dryRun ? 'Would delete' : 'Deleted';
+            core.notice(`${verb} ${rows.length} orphaned tags (cutoff ${cutoff.toISOString().slice(0, 10)})`);
+            core.summary
+              .addHeading(`${dryRun ? '🔍 Dry run — ' : '🗑️ '}Orphaned tags older than ${cutoff.toISOString().slice(0, 10)}`, 3)
+              .addRaw(`${rows.length} of ${orphans.length} orphaned tags matched (${allTags.length} tags total).`, true);
+            if (rows.length) {
+              core.summary.addTable([
+                ['Tag', 'Dated', 'Result'].map((data) => ({ data, header: true })),
+                ...rows
+              ]);
+            }
+            await core.summary.write();
