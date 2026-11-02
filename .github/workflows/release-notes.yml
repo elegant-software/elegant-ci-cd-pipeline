@@ -497,8 +497,12 @@ jobs:
     needs: generate
     if: needs.generate.outputs.release_required == 'true' && github.event_name != 'workflow_call'
     runs-on: ubuntu-latest
+    # Serialize so two quick merges can't each create their own draft.
+    concurrency:
+      group: release-draft-${{ github.repository }}-${{ inputs.version_suffix }}
+      cancel-in-progress: false
     steps:
-      - name: Create release tag and GitHub Release
+      - name: Create or update draft GitHub Release
         uses: actions/github-script@v8
         env:
           NEXT_VERSION: ${{ needs.generate.outputs.next_version }}
@@ -506,6 +510,7 @@ jobs:
           RELEASE_NOTES_MARKDOWN: ${{ needs.generate.outputs.release_notes_markdown }}
           VERSION_SUFFIX: ${{ inputs.version_suffix }}
           PRERELEASE: ${{ inputs.prerelease }}
+          CATEGORY_RULES: ${{ inputs.category_rules }}
         with:
           github-token: ${{ secrets.RELEASE_PUBLISH_TOKEN || github.token }}
           script: |
@@ -513,7 +518,7 @@ jobs:
             const repo = context.repo.repo;
             const nextVersion = (process.env.NEXT_VERSION || "").trim();
             const targetSha = (process.env.TARGET_SHA || context.sha).trim();
-            const releaseNotesMarkdown = process.env.RELEASE_NOTES_MARKDOWN || "";
+            const newNotes = process.env.RELEASE_NOTES_MARKDOWN || "";
             const versionSuffix = (process.env.VERSION_SUFFIX || "").trim();
             const prerelease = String(process.env.PRERELEASE || "false").toLowerCase() === "true";
 
@@ -521,57 +526,101 @@ jobs:
               throw new Error("NEXT_VERSION output is empty while release_required=true.");
             }
 
-            const releaseVersion = `${nextVersion}${versionSuffix}`;
-            const tagName = `v${releaseVersion}`;
+            const parse = (v) => (String(v).match(/(\d+)\.(\d+)\.(\d+)/) || [0, 0, 0, 0]).slice(1, 4).map(Number);
+            const cmp = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+            const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const draftTagRe = new RegExp(`^v\\d+\\.\\d+\\.\\d+${escapeRe(versionSuffix)}$`);
 
-            // Avoid duplicate failures when a prior run already published this version.
-            let existingTag;
-            try {
-              const response = await github.rest.git.getRef({
-                owner,
-                repo,
-                ref: `tags/${tagName}`,
-              });
-              existingTag = response.data;
-            } catch (error) {
-              if (error.status !== 404) {
-                throw error;
+            // Section order follows category_rules, "Other Changes" last.
+            let sectionOrder = [];
+            try { sectionOrder = Object.keys(JSON.parse(process.env.CATEGORY_RULES || "{}")); } catch {}
+            sectionOrder.push("Other Changes");
+
+            function parseNotes(markdown) {
+              const sections = new Map();
+              let current = null;
+              for (const line of String(markdown).split("\n")) {
+                const heading = line.match(/^##\s+(.+?)\s*$/);
+                if (heading) {
+                  current = heading[1];
+                  if (!sections.has(current)) sections.set(current, []);
+                } else if (current && /^\s*-\s+/.test(line)) {
+                  sections.get(current).push(line.trim());
+                }
               }
+              return sections;
             }
 
-            if (existingTag && existingTag.object.sha !== targetSha) {
-              throw new Error(`Tag ${tagName} already exists at a different commit than the release target.`);
+            function mergeNotes(existing, incoming) {
+              const merged = parseNotes(existing);
+              const prRef = (entry) => (entry.match(/#(\d+)\]/) || entry.match(/#(\d+)/) || [])[1];
+              const seen = new Set([...merged.values()].flat().map(prRef).filter(Boolean));
+              for (const [section, entries] of parseNotes(incoming)) {
+                if (!merged.has(section)) merged.set(section, []);
+                for (const entry of entries) {
+                  const ref = prRef(entry);
+                  if (ref && seen.has(ref)) continue;
+                  if (ref) seen.add(ref);
+                  merged.get(section).push(entry);
+                }
+              }
+              const order = [...sectionOrder, ...[...merged.keys()].filter((s) => !sectionOrder.includes(s))];
+              return order
+                .filter((s) => merged.get(s)?.length)
+                .map((s) => [`## ${s}`, ...merged.get(s), ""].join("\n"))
+                .join("\n")
+                .trim();
             }
 
-            if (!existingTag) {
-              await github.rest.git.createRef({
-                owner,
-                repo,
-                ref: `refs/tags/${tagName}`,
-                sha: targetSha,
-              });
-            }
+            // The tag of a draft is only created by GitHub when the draft is published,
+            // so the version boundary in `generate` is always the last published release.
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+            const draft = releases
+              .filter((r) => r.draft && r.prerelease === prerelease && draftTagRe.test(r.tag_name))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
 
-            const releaseName = tagName;
-            const releaseBody = releaseNotesMarkdown || "No release notes generated.";
-
-            try {
+            if (!draft) {
+              const tagName = `v${nextVersion}${versionSuffix}`;
               await github.rest.repos.createRelease({
                 owner,
                 repo,
                 tag_name: tagName,
-                name: releaseName,
-                body: releaseBody,
+                target_commitish: targetSha,
+                name: tagName,
+                body: newNotes || "No release notes generated.",
                 draft: true,
                 prerelease,
                 generate_release_notes: false,
               });
               core.info(`Created draft release ${tagName}.`);
               await core.summary.addHeading(`🏷️ Created draft release ${tagName}`, 3).write();
-            } catch (error) {
-              if (error.status === 422) {
-                core.info(`Release ${tagName} already exists. Skipping creation.`);
-              } else {
-                throw error;
+              return;
+            }
+
+            // Keep the higher of the draft's version and the version this PR alone would need,
+            // e.g. draft v1.2.1 (fix) + feature PR -> v1.3.0; draft v1.3.0 + fix PR -> stays v1.3.0.
+            const version = cmp(parse(nextVersion), parse(draft.tag_name)) > 0 ? parse(nextVersion) : parse(draft.tag_name);
+            const tagName = `v${version.join(".")}${versionSuffix}`;
+
+            // Legacy drafts had their tag pre-created; drop it so it can't act as a release boundary.
+            if (!releases.some((r) => !r.draft && r.tag_name === draft.tag_name)) {
+              try {
+                await github.rest.git.deleteRef({ owner, repo, ref: `tags/${draft.tag_name}` });
+                core.info(`Deleted pre-created tag ${draft.tag_name} of draft release.`);
+              } catch (error) {
+                if (error.status !== 404 && error.status !== 422) throw error;
               }
             }
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: draft.id,
+              tag_name: tagName,
+              target_commitish: targetSha,
+              name: tagName,
+              body: mergeNotes(draft.body || "", newNotes),
+            });
+            const action = tagName === draft.tag_name ? `Updated draft release ${tagName}` : `Bumped draft release ${draft.tag_name} → ${tagName}`;
+            core.info(`${action}.`);
+            await core.summary.addHeading(`🏷️ ${action}`, 3).write();
