@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -115,7 +115,7 @@ jobs:
           (( ${#files[@]} > 0 )) && echo "found=true" >> "$GITHUB_OUTPUT" || echo "found=false" >> "$GITHUB_OUTPUT"
 
       - name: Publish unit test report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always() && steps.check_unit_reports.outputs.found == 'true'
         with:
           name: Unit Tests
@@ -192,7 +192,7 @@ jobs:
           (( ${#files[@]} > 0 )) && echo "found=true" >> "$GITHUB_OUTPUT" || echo "found=false" >> "$GITHUB_OUTPUT"
 
       - name: Publish integration test report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always() && steps.check_integration_reports.outputs.found == 'true'
         with:
           name: Integration Tests
@@ -284,7 +284,7 @@ jobs:
           (( ${#files[@]} > 0 )) && echo "found=true" >> "$GITHUB_OUTPUT" || echo "found=false" >> "$GITHUB_OUTPUT"
 
       - name: Publish contract test report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always() && steps.check_contract_reports.outputs.found == 'true'
         with:
           name: Contract Tests
