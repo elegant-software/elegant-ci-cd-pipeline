@@ -1,4 +1,8 @@
-name: delete old/failed workflow runs
+name: Cleanup · Workflow Runs
+run-name: >-
+  Manual ·
+  ${{ inputs.dry_run && 'Dry run' || 'LIVE' }} ·
+  ${{ inputs.workflow_file || 'all workflows' }}
 
 on:
   workflow_dispatch:
@@ -51,6 +55,7 @@ permissions:
 
 jobs:
   cleanup:
+    name: ${{ inputs.dry_run && 'Preview' || 'Delete' }} ${{ inputs.delete_failed && 'failed + ' || '' }}runs older than ${{ inputs.older_than_days || '14' }}d
     runs-on: ubuntu-latest
     steps:
       - name: Delete old/failed workflow runs
@@ -111,14 +116,17 @@ jobs:
 
             let deleted = 0;
             let failedDeletes = 0;
+            const rows = [];
             for (const run of candidates) {
               const reason = [
                 deleteFailed && isFailed(run) ? "failed" : null,
                 isOld(run) ? `older_than_${olderThanDays}_days` : null,
               ].filter(Boolean).join("+");
+              const row = (result) => rows.push([run.name, `#${run.run_number}`, run.created_at.slice(0, 10), run.conclusion || run.status, reason, result]);
 
               if (dryRun) {
                 core.info(`[dry-run] would delete run_id=${run.id} workflow=${run.name} status=${run.status} conclusion=${run.conclusion} reason=${reason}`);
+                row("would delete");
                 continue;
               }
 
@@ -130,20 +138,31 @@ jobs:
                 });
                 deleted += 1;
                 core.info(`deleted run_id=${run.id} workflow=${run.name} reason=${reason}`);
+                row("✅ deleted");
               } catch (err) {
                 failedDeletes += 1;
                 core.warning(`failed deleting run_id=${run.id}: ${err.message}`);
+                row(`❌ ${err.message}`);
               }
             }
+
+            const verb = dryRun ? "Would delete" : "Deleted";
+            const count = dryRun ? candidates.length : deleted;
+            core.notice(`${verb} ${count} of ${runs.length} workflow runs${failedDeletes ? ` (${failedDeletes} failed)` : ""}`);
+            const maxRows = 100;
+            core.summary
+              .addHeading(`${dryRun ? "🔍 Dry run — " : "🗑️ "}Workflow runs in ${workflowFile || "all workflows"}`, 3)
+              .addRaw(`${candidates.length} of ${runs.length} runs matched (failed: ${deleteFailed}, older than: ${olderThanDays || "—"} days).`, true);
+            if (rows.length) {
+              core.summary.addTable([
+                ["Workflow", "Run", "Created", "Conclusion", "Reason", "Result"].map((data) => ({ data, header: true })),
+                ...rows.slice(0, maxRows)
+              ]);
+              if (rows.length > maxRows) core.summary.addRaw(`… and ${rows.length - maxRows} more`, true);
+            }
+            await core.summary.write();
 
             core.setOutput("scanned", String(runs.length));
             core.setOutput("matched", String(candidates.length));
             core.setOutput("deleted", String(deleted));
             core.setOutput("failed_deletes", String(failedDeletes));
-
-      - name: Print summary
-        run: |
-          echo "scanned=${{ steps.delete.outputs.scanned }}"
-          echo "matched=${{ steps.delete.outputs.matched }}"
-          echo "deleted=${{ steps.delete.outputs.deleted }}"
-          echo "failed_deletes=${{ steps.delete.outputs.failed_deletes }}"

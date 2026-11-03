@@ -46,6 +46,10 @@ actions:
     version: v5
     description: Set up a Java/JDK environment for Gradle builds
 
+  actions/setup-node:
+    version: v6
+    description: Set up a Node.js environment with npm caching for frontend builds
+
   actions/github-script:
     version: v8
     description: Run inline Node.js scripts against the GitHub API

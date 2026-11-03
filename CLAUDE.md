@@ -40,6 +40,7 @@ All workflows expose a `workflow_call` interface with explicit inputs, outputs, 
 | `pull-request-auto-label.yml` | Auto-label PRs from `labels.yml` file/title/body patterns |
 | `backend-build.yml` | Build & push Docker image from Java/Gradle app with provenance attestation |
 | `backend-gradle-test.yml` | Run Gradle unit + integration tests with PostgreSQL service container |
+| `frontend-npm-test.yml` | Run npm tests and publish JUnit results (job summary + check), like `backend-gradle-test.yml` |
 | `cleanup-github-workflows.yml` | Delete failed/old workflow runs |
 | `cleanup-release-tags.yml` | Delete stale releases+paired tags, then orphaned tags (tags with no release) |
 | `codex-spec-kit-agent.yml` | Run Codex CLI on the self-hosted runner with a Spec Kit prompt and open a PR |
@@ -55,7 +56,7 @@ Features are tracked in `specs/NNN-feature-name/` with spec, plan, tasks, and ch
 
 ## Conventions (from CONSTITUTION.md)
 
-- **Workflow file names**: kebab-case with prefixes (`ci-`, `cd-`, `cleanup-`, `reusable-`)
+- **Workflow naming & reporting**: follow [`docs/github-actions-conventions.md`](docs/github-actions-conventions.md): category-prefixed files, `<Category> · <What>` names, `run-name` on dispatch/schedule, named jobs with parameters, results in the job summary
 - **Secrets**: `UPPER_SNAKE_CASE` (e.g. `GHCR_TOKEN`, `AWS_ACCESS_KEY_ID`)
 - **Environments**: lowercase only (`dev`, `test`, `staging`, `prod`)
 - **Docker**: no wildcards in `COPY`; Gradle artifact must be named `app.jar`; use deterministic image tags, not filename versioning

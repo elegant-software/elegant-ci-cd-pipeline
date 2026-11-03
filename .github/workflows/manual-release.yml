@@ -1,4 +1,4 @@
-name: Manual Release
+name: Release · Manual Release
 
 on:
   workflow_call:
@@ -48,6 +48,7 @@ concurrency:
 
 jobs:
   plan:
+    name: Plan release from ${{ inputs.base_branch }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -114,6 +115,7 @@ jobs:
           retention-days: 7
 
   publish:
+    name: Publish release
     needs: plan
     if: needs.plan.outputs.release_required == 'true'
     runs-on: ubuntu-latest

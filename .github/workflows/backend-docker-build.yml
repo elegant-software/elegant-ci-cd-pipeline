@@ -1,4 +1,4 @@
-name: Build Application Image
+name: CD · Build Application Image
 
 on:
   workflow_call:
@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: ''
+      platforms:
+        description: 'Target image platforms, comma-separated (e.g. linux/amd64,linux/arm64)'
+        required: false
+        type: string
+        default: 'linux/amd64'
     outputs:
       image-uri:
         description: 'Full image URI'
@@ -43,6 +48,7 @@ permissions:
 
 jobs:
   build:
+    name: Build ${{ inputs.image-name }}:${{ inputs.image-tag }}
     runs-on: ubuntu-latest
 
     outputs:
@@ -65,6 +71,10 @@ jobs:
 
       - name: Build application
         run: ./gradlew build -x test ${{ inputs.gradle-args }}
+
+      - name: Set up QEMU
+        if: contains(inputs.platforms, 'arm64')
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -94,6 +104,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: ${{ inputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -107,3 +118,22 @@ jobs:
           subject-name: ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image-name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - name: Add image to job summary
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          {
+            echo "### 🐳 Built \`${{ inputs.image-name }}:${{ inputs.image-tag }}\`"
+            echo "| Digest | Platforms |"
+            echo "|---|---|"
+            echo "| \`${DIGEST}\` | ${PLATFORMS} |"
+            echo
+            echo "**Tags pushed**"
+            echo '```'
+            echo "${TAGS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Image pushed::${{ inputs.image-name }}:${{ inputs.image-tag }} (${DIGEST})"

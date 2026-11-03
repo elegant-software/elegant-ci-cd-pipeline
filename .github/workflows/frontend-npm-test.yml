@@ -1,0 +1,127 @@
+name: CI · Frontend Tests
+
+# Frontend counterpart of backend-gradle-test.yml: runs the npm test command and
+# reports JUnit XML results as a job-summary table, an artifact and a "Unit Tests" check.
+# The caller's test runner must write JUnit XML (e.g. karma-junit-reporter, jest-junit,
+# vitest --reporter=junit) to a path matching `test-results-path`.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version passed to actions/setup-node
+        required: false
+        type: string
+        default: "20"
+      test-command:
+        description: Command that runs the unit tests and writes JUnit XML
+        required: false
+        type: string
+        default: "npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox"
+      test-results-path:
+        description: Glob (relative to repo root) matching the JUnit XML result files
+        required: false
+        type: string
+        default: "test-results/**/*.xml"
+      report-name:
+        description: Name of the published check and job-summary heading
+        required: false
+        type: string
+        default: "Unit Tests"
+
+jobs:
+  test:
+    name: ${{ inputs.report-name }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        id: tests
+        continue-on-error: true
+        run: ${{ inputs.test-command }}
+
+      - name: Summarize test results
+        if: always()
+        shell: python3 {0}
+        env:
+          RESULTS_GLOB: ${{ inputs.test-results-path }}
+          REPORT_NAME: ${{ inputs.report-name }}
+        run: |
+          import glob, os, xml.etree.ElementTree as ET
+
+          files = sorted(glob.glob(os.environ["RESULTS_GLOB"], recursive=True))
+          title = os.environ["REPORT_NAME"]
+          total = failures = errors = skipped = 0
+          failed_tests = []
+
+          for path in files:
+            # Handles both a single <testsuite> root and a <testsuites> wrapper.
+            for suite in ET.parse(path).getroot().iter("testsuite"):
+              total    += int(suite.get("tests",    0))
+              failures += int(suite.get("failures", 0))
+              errors   += int(suite.get("errors",   0))
+              skipped  += int(suite.get("skipped",  0))
+              for tc in suite.findall("testcase"):
+                for child in tc:
+                  if child.tag in ("failure", "error"):
+                    cls  = tc.get("classname", "")
+                    name = tc.get("name", "")
+                    msg  = (child.get("message") or child.text or "").split("\n")[0][:150]
+                    msg  = msg.replace("|", "\\|")
+                    failed_tests.append((f"{cls}.{name}" if cls else name, msg))
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write(f"## {title}\n\n")
+            if not files:
+              f.write("No test result files were found.\n")
+            else:
+              fail_icon = " ❌" if (failures + errors) else ""
+              f.write("| Metric | Value |\n")
+              f.write("|--------|-------|\n")
+              f.write(f"| Tests | {total} |\n")
+              f.write(f"| Failures{fail_icon} | {failures} |\n")
+              f.write(f"| Errors{fail_icon} | {errors} |\n")
+              f.write(f"| Skipped | {skipped} |\n")
+              if failed_tests:
+                f.write(f"\n### ❌ Failing {title}\n\n")
+                f.write("| Test | Reason |\n")
+                f.write("|------|--------|\n")
+                for test_name, msg in failed_tests:
+                  f.write(f"| `{test_name}` | {msg} |\n")
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-results
+          if-no-files-found: ignore
+          path: ${{ inputs.test-results-path }}
+
+      - name: Publish test report
+        uses: dorny/test-reporter@v1
+        if: always() && hashFiles(inputs.test-results-path) != ''
+        with:
+          name: ${{ inputs.report-name }}
+          path: ${{ inputs.test-results-path }}
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Fail if tests failed
+        if: always() && steps.tests.outcome != 'success'
+        run: exit 1
