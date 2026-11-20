@@ -4,6 +4,11 @@ run-name: "Release notes from ${{ inputs.base_branch || 'main' }}"
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       base_branch:
         description: Primary branch used to collect merged pull requests
         required: false
@@ -160,7 +165,7 @@ permissions:
 jobs:
   generate:
     name: Evaluate merged PRs on ${{ inputs.base_branch || 'main' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || vars.RUNNER || 'ubuntu-latest' }}
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     outputs:
       release_required: ${{ steps.evaluate.outputs.release_required }}
@@ -496,7 +501,7 @@ jobs:
     name: Publish v${{ needs.generate.outputs.next_version }}${{ inputs.version_suffix }}
     needs: generate
     if: needs.generate.outputs.release_required == 'true' && github.event_name != 'workflow_call'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || vars.RUNNER || 'ubuntu-latest' }}
     # Serialize so two quick merges can't each create their own draft.
     concurrency:
       group: release-draft-${{ github.repository }}-${{ inputs.version_suffix }}

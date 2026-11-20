@@ -36,6 +36,11 @@ on:
         type: string
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: self-hosted
       prompt:
         description: Prompt sent to Codex CLI
         required: false
@@ -81,7 +86,7 @@ permissions:
 jobs:
   codex-spec-kit:
     name: "Codex Spec Kit #${{ inputs.issue_number || github.event.inputs.issue_number || '?' }} (${{ inputs.source_status || github.event.inputs.source_status || 'manual' }})"
-    runs-on: self-hosted
+    runs-on: ${{ inputs.runner || vars.RUNNER || 'self-hosted' }}
     outputs:
       final_feedback: ${{ steps.run_codex.outputs.final_feedback }}
       pull_request_url: ${{ steps.create_pr.outputs.pull-request-url }}

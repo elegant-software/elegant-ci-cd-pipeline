@@ -12,7 +12,7 @@ permissions:
 jobs:
   check-action-versions:
     name: Validate action versions against manifest
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout repository

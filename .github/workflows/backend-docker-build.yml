@@ -3,6 +3,11 @@ name: CD · Build Application Image
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       image-name:
         description: 'Docker image name'
         required: true
@@ -39,7 +44,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ inputs.image-name }}:${{ inputs.image-tag }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     outputs:
       image-uri: ${{ steps.meta.outputs.tags }}

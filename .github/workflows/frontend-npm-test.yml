@@ -8,6 +8,11 @@ name: CI · Frontend Tests
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       node-version:
         description: Node.js version passed to actions/setup-node
         required: false
@@ -32,7 +37,7 @@ on:
 jobs:
   test:
     name: ${{ inputs.report-name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     permissions:
       contents: read

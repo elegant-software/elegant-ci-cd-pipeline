@@ -6,11 +6,17 @@
 name: CI · Qodana Code Quality
 on:
   workflow_call:
+    inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: self-hosted
 
 jobs:
   qodana:
     name: Qodana scan
-    runs-on: self-hosted
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: write
       pull-requests: write
@@ -41,5 +47,6 @@ jobs:
     uses: ./.github/workflows/general-util-watchdog.yml
     with:
          wait-minutes: 15
+         runner: ${{ inputs.runner }}
     permissions:
       actions: write

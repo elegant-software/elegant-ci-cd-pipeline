@@ -29,6 +29,11 @@ on:
         type: boolean
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       workflow_file:
         description: "Workflow file name to clean (blank = all workflows), e.g. codex-spec-kit-agent.yml"
         required: false
@@ -56,7 +61,7 @@ permissions:
 jobs:
   cleanup:
     name: ${{ inputs.dry_run && 'Preview' || 'Delete' }} ${{ inputs.delete_failed && 'failed + ' || '' }}runs older than ${{ inputs.older_than_days || '14' }}d
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Delete old/failed workflow runs
         id: delete

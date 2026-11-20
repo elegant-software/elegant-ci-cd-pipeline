@@ -3,6 +3,11 @@ name: Cleanup · Releases & Tags
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       older_than_days:
         description: "Delete releases/tags older than this many days"
         required: true
@@ -29,7 +34,7 @@ permissions:
 jobs:
   cleanup:
     name: ${{ inputs.dry_run && 'Preview' || 'Delete' }} releases & tags older than ${{ inputs.older_than_days }}d
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     steps:
       - name: Validate inputs and compute cutoff date

@@ -4,6 +4,11 @@ run-name: "Issue spec #${{ inputs.issue_number || github.event.issue.number || g
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       issue_number:
         description: Issue number to process for reusable workflow callers
         required: false
@@ -66,7 +71,7 @@ concurrency:
 jobs:
   evaluate:
     name: "Evaluate #${{ github.event.issue.number || inputs.issue_number || github.event.client_payload.issue_number || github.event.client_payload.issue.number || github.event.inputs.issue_number || '?' }}"
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || vars.RUNNER || 'ubuntu-latest' }}
     outputs:
       status: ${{ steps.evaluate.outputs.status }}
       message: ${{ steps.evaluate.outputs.message }}
@@ -459,6 +464,7 @@ jobs:
     uses: ./.github/workflows/codex-spec-kit-agent.yml
     secrets: inherit
     with:
+      runner: ${{ inputs.runner }}
       prompt: ${{ needs.evaluate.outputs.prompt }}
       issue_number: ${{ needs.evaluate.outputs.issue_number }}
       issue_title: ${{ needs.evaluate.outputs.issue_title }}
@@ -470,7 +476,7 @@ jobs:
 
   report:
     name: "Report #${{ needs.evaluate.outputs.issue_number }} (${{ needs.evaluate.outputs.caller_status }})"
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || vars.RUNNER || 'ubuntu-latest' }}
     needs:
       - evaluate
       - handoff

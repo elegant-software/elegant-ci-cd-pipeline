@@ -3,6 +3,11 @@ name: Util · Watchdog
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       wait-minutes:
         description: 'Minutes to wait before cancelling the workflow run'
         type: number
@@ -12,7 +17,7 @@ on:
 jobs:
   watchdog:
     name: Cancel run after ${{ inputs.wait-minutes }}m
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       actions: write
     steps:

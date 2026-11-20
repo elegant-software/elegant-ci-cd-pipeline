@@ -2,11 +2,17 @@ name: CI · Dependency-Track SBOM Upload
 
 on:
   workflow_call:
+    inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: self-hosted
 
 jobs:
   sbom-upload:
     name: Upload SBOM to Dependency-Track
-    runs-on: self-hosted
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
     steps:
@@ -33,5 +39,7 @@ jobs:
   watchdog:
     name: Watchdog
     uses: ./.github/workflows/general-util-watchdog.yml
+    with:
+      runner: ${{ inputs.runner }}
     permissions:
       actions: write

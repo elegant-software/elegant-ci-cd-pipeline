@@ -3,6 +3,11 @@ name: Release · Manual Release
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       release_boundary:
         description: Tag to diff from. Leave blank to use the latest semantic version tag.
         required: false
@@ -49,7 +54,7 @@ concurrency:
 jobs:
   plan:
     name: Plan release from ${{ inputs.base_branch }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
     outputs:
@@ -118,7 +123,7 @@ jobs:
     name: Publish release
     needs: plan
     if: needs.plan.outputs.release_required == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
     steps:

@@ -3,6 +3,11 @@ name: PR · Auto-Label
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       pr_number:
         description: 'Pull request number to label (caller should pass this for workflow_call executions)'
         required: false
@@ -29,7 +34,7 @@ permissions:
 jobs:
   label:
     name: Label PR #${{ inputs.pr_number || github.event.pull_request.number }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || vars.RUNNER || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout code

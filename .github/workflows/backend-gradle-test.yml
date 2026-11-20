@@ -3,6 +3,11 @@ name: CI · Backend Gradle Tests
 on:
   workflow_call:
     inputs:
+      runner:
+        description: Runner label to run on (single label)
+        required: false
+        type: string
+        default: ubuntu-latest
       gradle-args:
         description: Additional Gradle arguments appended to each test command
         required: false
@@ -27,7 +32,7 @@ on:
 jobs:
   test:
     name: Gradle
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
 
     permissions:
       contents: read
