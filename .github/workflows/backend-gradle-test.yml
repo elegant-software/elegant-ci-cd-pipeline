@@ -3,6 +3,11 @@ name: CI · Backend Gradle Tests
 on:
   workflow_call:
     inputs:
+      java-version:
+        description: JDK version installed by setup-java
+        required: false
+        type: string
+        default: "21"
       runner:
         description: Runner label to run on (single label)
         required: false
@@ -47,7 +52,7 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
-          java-version: "21"
+          java-version: ${{ inputs.java-version }}
           distribution: temurin
           cache: gradle
 
