@@ -98,7 +98,7 @@ jobs:
       - name: Show runner
         run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.target_repo || github.event.inputs.target_repo || github.repository }}
           token: ${{ secrets.CROSS_REPO_TOKEN || secrets.GITHUB_TOKEN }}
@@ -329,7 +329,7 @@ jobs:
 
       - name: Link PR to GitHub Project
         if: steps.create_pr.outputs.pull-request-number != '' && (inputs.project_name || github.event.inputs.project_name) != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ steps.create_pr.outputs.pull-request-number }}
           PROJECT_NAME: ${{ inputs.project_name || github.event.inputs.project_name }}
