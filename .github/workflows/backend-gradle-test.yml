@@ -7,7 +7,7 @@ on:
         description: JDK version installed by setup-java
         required: false
         type: string
-        default: "21"
+        default: "25"
       runner:
         description: Runner label to run on (single label)
         required: false
