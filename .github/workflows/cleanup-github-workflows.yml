@@ -63,6 +63,8 @@ jobs:
     name: ${{ inputs.dry_run && 'Preview' || 'Delete' }} ${{ inputs.delete_failed && 'failed + ' || '' }}runs older than ${{ inputs.older_than_days || '14' }}d
     runs-on: ${{ inputs.runner || vars.RUNNER || 'ubuntu-latest' }}
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Delete old/failed workflow runs
         id: delete
         uses: actions/github-script@v8

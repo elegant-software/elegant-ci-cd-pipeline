@@ -178,6 +178,8 @@ jobs:
       excluded_prs_with_reasons: ${{ steps.evaluate.outputs.excluded_prs_with_reasons }}
       decision_reason: ${{ steps.evaluate.outputs.decision_reason }}
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
@@ -507,6 +509,8 @@ jobs:
       group: release-draft-${{ github.repository }}-${{ inputs.version_suffix }}
       cancel-in-progress: false
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Create or update draft GitHub Release
         uses: actions/github-script@v8
         env:

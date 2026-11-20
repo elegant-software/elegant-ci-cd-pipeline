@@ -21,6 +21,8 @@ jobs:
     permissions:
       actions: write
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Wait ${{ inputs.wait-minutes }} minute(s)
         run: sleep $(( ${{ inputs.wait-minutes }} * 60 ))
 

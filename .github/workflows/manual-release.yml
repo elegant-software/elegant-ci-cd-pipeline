@@ -60,6 +60,8 @@ jobs:
     outputs:
       release_required: ${{ steps.evaluate.outputs.release_required }}
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Checkout calling repository history
         uses: actions/checkout@v6
         with:
@@ -127,6 +129,8 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Checkout centralized release automation
         uses: actions/checkout@v6
         with:

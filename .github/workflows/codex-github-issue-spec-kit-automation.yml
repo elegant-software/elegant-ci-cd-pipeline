@@ -85,6 +85,8 @@ jobs:
       branch_prefix: ${{ steps.evaluate.outputs.branch_prefix }}
 
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Evaluate issue body and build prompt
         id: evaluate
         uses: actions/github-script@v8
@@ -488,6 +490,8 @@ jobs:
       downstream_workflow: ${{ steps.report.outputs.downstream_workflow }}
 
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Publish visible issue outcome
         id: report
         uses: actions/github-script@v8

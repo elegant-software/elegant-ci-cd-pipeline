@@ -95,6 +95,8 @@ jobs:
       LC_ALL: C.UTF-8
       LANGUAGE: C
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Check out repository
         uses: actions/checkout@v6
         with:

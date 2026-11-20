@@ -15,6 +15,8 @@ jobs:
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
 
     steps:
+      - name: Show runner
+        run: echo "Runner ${{ runner.name }} (${{ runner.environment }}, ${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
       - name: Checkout repository
         uses: actions/checkout@v6
 
